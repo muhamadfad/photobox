@@ -415,6 +415,7 @@ export default function App() {
         onClose={() => setIsExportOpen(false)}
         targetRef={printAreaRef}
         templateName={activeTemplate.name}
+        filterSettings={filterSettings}
       />
 
       {/* QR Code Modal for Instant Smartphone Access */}

@@ -189,34 +189,81 @@ export function getFilterStyle(settings) {
   const s = settings || DEFAULT_FILTER_SETTINGS;
   return {
     filter: getCssFilterString(s),
-    transform: 'translateZ(0)', // Force GPU acceleration
   };
 }
 
-// Applies filters directly onto an HTML5 Canvas context (used during High-Res photo render & capture)
-export function applyFiltersToCanvas(ctx, width, height, settings) {
+// Draws a single photo with object-fit: cover, rounded corners, and all aesthetic filters directly onto an HTML5 2D Canvas
+export function drawPhotoWithFiltersToCanvas(ctx, img, dx, dy, dw, dh, radius = 0, settings) {
+  if (!ctx || !img) return;
+  const iw = img.naturalWidth || img.width || dw;
+  const ih = img.naturalHeight || img.height || dh;
+  if (!iw || !ih) return;
+
   const s = settings || DEFAULT_FILTER_SETTINGS;
 
-  // 1. Soft Glow / Bloom (Skin Smoothing emulation)
+  // Calculate object-fit: cover crop
+  const targetRatio = dw / dh;
+  const imgRatio = iw / ih;
+  let sx = 0;
+  let sy = 0;
+  let sw = iw;
+  let sh = ih;
+
+  if (imgRatio > targetRatio) {
+    sw = ih * targetRatio;
+    sx = (iw - sw) / 2;
+  } else {
+    sh = iw / targetRatio;
+    sy = (ih - sh) / 2;
+  }
+
+  ctx.save();
+
+  // Rounded rectangle clip
+  const r = Math.max(0, Math.min(radius, dw / 2, dh / 2));
+  ctx.beginPath();
+  ctx.moveTo(dx + r, dy);
+  ctx.lineTo(dx + dw - r, dy);
+  ctx.quadraticCurveTo(dx + dw, dy, dx + dw, dy + r);
+  ctx.lineTo(dx + dw, dy + dh - r);
+  ctx.quadraticCurveTo(dx + dw, dy + dh, dx + dw - r, dy + dh);
+  ctx.lineTo(dx + r, dy + dh);
+  ctx.quadraticCurveTo(dx, dy + dh, dx, dy + dh - r);
+  ctx.lineTo(dx, dy + r);
+  ctx.quadraticCurveTo(dx, dy, dx + r, dy);
+  ctx.closePath();
+  ctx.clip();
+
+  // Draw base image with CSS filter
+  try {
+    ctx.filter = getCssFilterString(s);
+  } catch (e) {
+    // Fallback if browser doesn't support ctx.filter
+  }
+  ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+  ctx.filter = 'none';
+
+  // 1. Soft Glow / Bloom
   if (s.softGlow && s.softGlow > 0) {
-    const glowIntensity = (s.softGlow / 100) * 0.4;
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
-    ctx.filter = `blur(${Math.max(2, width * 0.015)}px) brightness(1.15)`;
-    ctx.globalAlpha = glowIntensity;
-    ctx.drawImage(ctx.canvas, 0, 0, width, height);
+    try {
+      ctx.filter = `blur(${Math.max(2, Math.round(dw * 0.015))}px) brightness(1.12)`;
+    } catch (e) {}
+    ctx.globalAlpha = (s.softGlow / 100) * 0.32;
+    ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
     ctx.restore();
   }
 
-  // 2. Halftone Dots Overlay (Newspaper effect)
+  // 2. Halftone Dots Overlay
   if (s.halftone) {
     ctx.save();
     ctx.globalCompositeOperation = 'multiply';
-    const dotSpacing = Math.max(3, Math.round(width / 160));
-    const dotRadius = dotSpacing * 0.35;
-    ctx.fillStyle = 'rgba(40, 35, 30, 0.28)';
-    for (let y = 0; y < height; y += dotSpacing) {
-      for (let x = 0; x < width; x += dotSpacing) {
+    const dotSpacing = Math.max(4, Math.round(dw / 90));
+    const dotRadius = dotSpacing * 0.32;
+    ctx.fillStyle = 'rgba(40, 35, 30, 0.22)';
+    for (let y = dy; y < dy + dh; y += dotSpacing) {
+      for (let x = dx; x < dx + dw; x += dotSpacing) {
         ctx.beginPath();
         ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
         ctx.fill();
@@ -227,12 +274,10 @@ export function applyFiltersToCanvas(ctx, width, height, settings) {
 
   // 3. Procedural Film Grain Overlay
   if (s.filmGrain && s.filmGrain > 0) {
-    const grainAlpha = (s.filmGrain / 100) * 0.25;
+    const grainAlpha = (s.filmGrain / 100) * 0.22;
     ctx.save();
     ctx.globalCompositeOperation = 'overlay';
-    
-    // Create random noise pattern in a small offscreen canvas to avoid full canvas pixel loops
-    const noiseTileSize = 128;
+    const noiseTileSize = 96;
     const noiseCanvas = document.createElement('canvas');
     noiseCanvas.width = noiseTileSize;
     noiseCanvas.height = noiseTileSize;
@@ -244,15 +289,14 @@ export function applyFiltersToCanvas(ctx, width, height, settings) {
       data[i] = val;
       data[i + 1] = val;
       data[i + 2] = val;
-      data[i + 3] = Math.floor(Math.random() * 180 + 75);
+      data[i + 3] = Math.floor(Math.random() * 160 + 60);
     }
     nCtx.putImageData(imgData, 0, 0);
-
     const pattern = ctx.createPattern(noiseCanvas, 'repeat');
     if (pattern) {
       ctx.fillStyle = pattern;
       ctx.globalAlpha = grainAlpha;
-      ctx.fillRect(0, 0, width, height);
+      ctx.fillRect(dx, dy, dw, dh);
     }
     ctx.restore();
   }
@@ -261,15 +305,17 @@ export function applyFiltersToCanvas(ctx, width, height, settings) {
   if (s.vignette && s.vignette > 0) {
     ctx.save();
     ctx.globalCompositeOperation = 'multiply';
+    const cx = dx + dw / 2;
+    const cy = dy + dh / 2;
     const vigGradient = ctx.createRadialGradient(
-      width / 2, height / 2, width * 0.3,
-      width / 2, height / 2, width * 0.75
+      cx, cy, dw * 0.25,
+      cx, cy, dw * 0.75
     );
-    const maxVig = (s.vignette / 100) * 0.6;
+    const maxVig = (s.vignette / 100) * 0.55;
     vigGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
     vigGradient.addColorStop(1, `rgba(15, 10, 5, ${maxVig})`);
     ctx.fillStyle = vigGradient;
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(dx, dy, dw, dh);
     ctx.restore();
   }
 
@@ -277,18 +323,23 @@ export function applyFiltersToCanvas(ctx, width, height, settings) {
   if (s.dateStamp) {
     ctx.save();
     const dateText = s.customDate || "'26 10 12";
-    const fontSize = Math.max(14, Math.round(width * 0.055));
-    ctx.font = `${fontSize}px 'VT323', 'Courier Prime', monospace`;
+    const fontSize = Math.max(12, Math.round(dw * 0.065));
+    ctx.font = `bold ${fontSize}px 'VT323', 'Courier New', monospace`;
     ctx.fillStyle = '#ff7b00';
-    ctx.shadowColor = 'rgba(255, 60, 0, 0.8)';
-    ctx.shadowBlur = Math.round(fontSize * 0.3);
+    ctx.shadowColor = 'rgba(255, 60, 0, 0.75)';
+    ctx.shadowBlur = Math.round(fontSize * 0.25);
     ctx.textAlign = 'right';
     ctx.textBaseline = 'bottom';
-    
-    // Draw in bottom right corner
-    const padX = width * 0.05;
-    const padY = height * 0.05;
-    ctx.fillText(dateText, width - padX, height - padY);
+    ctx.fillText(dateText, dx + dw - dw * 0.04, dy + dh - dh * 0.03);
     ctx.restore();
   }
+
+  ctx.restore();
 }
+
+// Applies filters directly onto an HTML5 Canvas context (used during High-Res photo render & capture)
+export function applyFiltersToCanvas(ctx, width, height, settings) {
+  const s = settings || DEFAULT_FILTER_SETTINGS;
+  drawPhotoWithFiltersToCanvas(ctx, ctx.canvas, 0, 0, width, height, 0, s);
+}
+

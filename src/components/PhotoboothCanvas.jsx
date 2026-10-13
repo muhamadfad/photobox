@@ -476,19 +476,28 @@ export default function PhotoboothCanvas({
 
                   {/* Collage badges for retro_90s_pop */}
                   {currentTheme === 'retro_90s_pop' && idx === 1 && (
-                    <div className="absolute right-[-4px] top-1/4 z-20 pointer-events-none bg-amber-400 text-stone-900 text-[8px] font-black font-mono px-1.5 py-0.5 rounded shadow rotate-12">
+                    <div
+                      data-floating-overlay="true"
+                      className="absolute right-[-4px] top-1/4 z-20 pointer-events-none bg-amber-400 text-stone-900 text-[8px] font-black font-mono px-1.5 py-0.5 rounded shadow rotate-12"
+                    >
                       POP★
                     </div>
                   )}
                   {currentTheme === 'retro_90s_pop' && idx === 2 && (
-                    <div className="absolute left-[-4px] top-1/2 z-20 pointer-events-none bg-stone-900 text-white text-[8px] font-black font-mono px-1.5 py-0.5 rounded-full shadow -rotate-12 border border-white/40">
+                    <div
+                      data-floating-overlay="true"
+                      className="absolute left-[-4px] top-1/2 z-20 pointer-events-none bg-stone-900 text-white text-[8px] font-black font-mono px-1.5 py-0.5 rounded-full shadow -rotate-12 border border-white/40"
+                    >
                       #8
                     </div>
                   )}
 
                   {/* Cherish Cat 16 badge */}
                   {currentTheme === 'cherish_cat' && idx === 1 && (
-                    <div className="absolute right-1 -top-2 text-sky-300 font-serif font-black text-lg italic drop-shadow z-20">
+                    <div
+                      data-floating-overlay="true"
+                      className="absolute right-1 -top-2 text-sky-300 font-serif font-black text-lg italic drop-shadow z-20"
+                    >
                       {custom.badgeNum || '16'}
                     </div>
                   )}
@@ -527,7 +536,10 @@ export default function PhotoboothCanvas({
                         : 'rounded-md border border-current'
                     }`}
                   >
-                    <div className="w-full h-full relative overflow-hidden bg-neutral-950 rounded-xs">
+                    <div
+                      data-photo-slot={idx}
+                      className="w-full h-full relative overflow-hidden bg-neutral-950 rounded-xs"
+                    >
                       {photoUrl ? (
                         <div className="w-full h-full relative overflow-hidden">
                           <img
@@ -541,10 +553,14 @@ export default function PhotoboothCanvas({
 
                           {/* Aesthetic Filter Overlays */}
                           {filterSettings?.halftone && (
-                            <div className="absolute inset-0 newsprint-overlay pointer-events-none" />
+                            <div
+                              data-photo-overlay="true"
+                              className="absolute inset-0 newsprint-overlay pointer-events-none"
+                            />
                           )}
                           {filterSettings?.filmGrain > 0 && (
                             <div
+                              data-photo-overlay="true"
                               className="absolute inset-0 film-grain-overlay pointer-events-none"
                               style={{
                                 opacity: (filterSettings.filmGrain / 100) * 0.45
@@ -552,7 +568,10 @@ export default function PhotoboothCanvas({
                             />
                           )}
                           {filterSettings?.dateStamp && (
-                            <div className="absolute right-2 bottom-1 font-digital text-[#ff7b00] text-sm drop-shadow pointer-events-none">
+                            <div
+                              data-photo-overlay="true"
+                              className="absolute right-2 bottom-1 font-digital text-[#ff7b00] text-sm drop-shadow pointer-events-none"
+                            >
                               {filterSettings.customDate || "'26 10 12"}
                             </div>
                           )}
@@ -565,7 +584,10 @@ export default function PhotoboothCanvas({
                       )}
 
                       {/* Hover Prompt */}
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                      <div
+                        data-hover-prompt="true"
+                        className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center"
+                      >
                         <span className="opacity-0 group-hover:opacity-100 bg-neutral-900/90 text-white text-[10px] font-sans px-2.5 py-1 rounded-full shadow border border-white/20">
                           {photoUrl ? 'Ganti Foto' : 'Ambil Foto'}
                         </span>
@@ -939,6 +961,7 @@ export default function PhotoboothCanvas({
         {stickers.map((stk) => (
           <div
             key={stk.instanceId}
+            data-floating-overlay="true"
             onClick={(e) => {
               e.stopPropagation();
               if (onRemoveSticker) onRemoveSticker(stk.instanceId);
@@ -968,7 +991,10 @@ export default function PhotoboothCanvas({
             ) : (
               <span className="text-3xl filter drop-shadow-md">{stk.emoji}</span>
             )}
-            <span className="opacity-0 group-hover:opacity-100 absolute -top-3 -right-3 w-4 h-4 bg-red-600 text-white rounded-full flex items-center justify-center text-[9px] font-bold shadow">
+            <span
+              data-hover-prompt="true"
+              className="opacity-0 group-hover:opacity-100 absolute -top-3 -right-3 w-4 h-4 bg-red-600 text-white rounded-full flex items-center justify-center text-[9px] font-bold shadow"
+            >
               ✕
             </span>
           </div>
