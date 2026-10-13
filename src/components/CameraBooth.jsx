@@ -36,17 +36,17 @@ export default function CameraBooth({
   const [flash, setFlash] = useState(false);
   const [currentSlotIndex, setCurrentSlotIndex] = useState(targetSlot ?? 0);
   const [delaySec, setDelaySec] = useState(3);
-  const [ringLightOn, setRingLightOn] = useState(true);
+  const [ringLightOn, setRingLightOn] = useState(false);
   const [cameraError, setCameraError] = useState(null);
 
-  // Auto-Focus & Auto-Lighting Telemetry
+  // Bi-Directional Auto-Focus & Auto-Lighting Telemetry (Dark Boost + Bright/Backlight Anti-Glare)
   const [sceneInfo, setSceneInfo] = useState({
-    luminance: 65,
+    luminance: 55,
     status: 'OPTIMAL',
-    label: 'AF • Studio Light Aktif',
-    boostNeeded: 14,
+    label: 'AF • Cahaya Seimbang',
+    boostNeeded: 0,
     contrastBoost: 6,
-    saturationBoost: 6
+    saturationBoost: 4
   });
   const [focusPoint, setFocusPoint] = useState({ x: 0.5, y: 0.45 });
   const [focusState, setFocusState] = useState('locked'); // 'locking' | 'locked'
@@ -62,8 +62,8 @@ export default function CameraBooth({
     }
   }, [targetSlot]);
 
-  // Apply hardware-level Continuous Auto-Focus, Auto-Exposure & Auto-White-Balance when supported
-  const applyHardwareCameraEnhancements = async (mediaStream, point = { x: 0.5, y: 0.45 }, lightBoost = 0) => {
+  // Apply hardware-level Continuous Auto-Focus, Auto-Exposure & Auto-White-Balance without forcing positive overexposure
+  const applyHardwareCameraEnhancements = async (mediaStream, point = { x: 0.5, y: 0.45 }) => {
     try {
       const track = mediaStream?.getVideoTracks?.()[0];
       if (!track || typeof track.getCapabilities !== 'function') return;
@@ -91,16 +91,6 @@ export default function CameraBooth({
         advanced.pointsOfInterest = [{ x: point.x, y: point.y }];
       }
 
-      // Boost hardware sensor exposure compensation if camera is in a dim room
-      if (caps.exposureCompensation && lightBoost > 15) {
-        const maxExp = caps.exposureCompensation.max || 0;
-        const stepSize = caps.exposureCompensation.step || 0.5;
-        if (maxExp > 0) {
-          const desired = Math.min(maxExp, Math.max(stepSize, maxExp * 0.45));
-          advanced.exposureCompensation = desired;
-        }
-      }
-
       if (Object.keys(advanced).length > 0) {
         await track.applyConstraints({ advanced: [advanced] });
       }
@@ -120,13 +110,13 @@ export default function CameraBooth({
       const info = analyzeVideoScene(videoRef.current, newPoint);
       setSceneInfo(info);
       if (stream) {
-        applyHardwareCameraEnhancements(stream, newPoint, info.boostNeeded);
+        applyHardwareCameraEnhancements(stream, newPoint);
       }
     }
 
     focusTimerRef.current = setTimeout(() => {
       setFocusState('locked');
-    }, 380);
+    }, 350);
   };
 
   const startCamera = async (facing = facingMode) => {
@@ -145,13 +135,15 @@ export default function CameraBooth({
         audio: false
       });
       setStream(mediaStream);
-      applyHardwareCameraEnhancements(mediaStream, { x: 0.5, y: 0.45 }, 20);
+      applyHardwareCameraEnhancements(mediaStream, { x: 0.5, y: 0.45 });
 
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
         videoRef.current.onloadedmetadata = () => {
           videoRef.current?.play().catch(() => {});
-          triggerAutoFocusLock({ x: 0.5, y: 0.45 });
+          setTimeout(() => {
+            triggerAutoFocusLock({ x: 0.5, y: 0.45 });
+          }, 250);
         };
       }
     } catch (err) {
@@ -174,7 +166,7 @@ export default function CameraBooth({
     };
   }, [isOpen, facingMode]);
 
-  // Continuous Real-Time Auto-Exposure & Auto-Lighting Analyzer (every 500ms)
+  // Continuous Real-Time Auto-Exposure & Anti-Backlight Analyzer (every 400ms)
   useEffect(() => {
     if (!isOpen || cameraError) return;
     const interval = setInterval(() => {
@@ -182,7 +174,7 @@ export default function CameraBooth({
         const res = analyzeVideoScene(videoRef.current, focusPoint);
         setSceneInfo(res);
       }
-    }, 500);
+    }, 400);
     return () => clearInterval(interval);
   }, [isOpen, cameraError, focusPoint]);
 
@@ -202,7 +194,7 @@ export default function CameraBooth({
     triggerAutoFocusLock({ x: clickX, y: clickY });
   };
 
-  // Capture frame with 5-Stage Computational ISP (AWB + Auto-HDR + Denoise + Auto-Focus Sharpen + 3D Studio Light)
+  // Capture frame with Bi-Directional ISP (Dark Boost OR Bright/Backlight Dehaze + Auto-Focus Sharpen)
   const captureFrame = (slotToFill) => {
     if (!videoRef.current) return null;
     const video = videoRef.current;
@@ -219,7 +211,6 @@ export default function CameraBooth({
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     ctx.restore();
 
-    // Run 5-Stage Studio ISP so even dark/blurry webcams produce sharp, luminous studio portraits
     const effectiveFocusPoint = {
       x: isMirrored ? 1 - focusPoint.x : focusPoint.x,
       y: focusPoint.y
@@ -334,33 +325,26 @@ export default function CameraBooth({
 
   if (!isOpen) return null;
 
-  const filterStyle = getFilterStyle(filterSettings);
-  // Real-time Auto-Exposure, Contrast, Saturation & Optical Focus Sharpening for live video feed
-  const bBoost = 1 + (sceneInfo.boostNeeded || 12) / 100;
-  const cBoost = 1 + (sceneInfo.contrastBoost || 6) / 100;
-  const sBoost = 1 + (sceneInfo.saturationBoost || 6) / 100;
-  const liveAiFilter = `brightness(${bBoost.toFixed(2)}) contrast(${cBoost.toFixed(2)}) saturate(${sBoost.toFixed(2)}) url(#studio-optical-focus)`;
+  // Bi-directional live auto-exposure compensation:
+  // - If BRIGHT/BACKLIT (boostNeeded < 0): lowers brightness & boosts contrast to remove glare
+  // - If LOW_LIGHT (boostNeeded > 0): lifts brightness & adds contrast
+  // - If OPTIMAL (boostNeeded === 0): keeps natural exposure
+  const userBrightness = sceneInfo.status === 'BRIGHT' ? Math.min(0, filterSettings?.brightness || 0) : (filterSettings?.brightness || 0);
+  const userContrast = filterSettings?.contrast || 0;
+  const userSaturation = filterSettings?.saturation || 0;
+
+  const totalBrightness = 1 + (userBrightness + (sceneInfo.boostNeeded ?? 0)) / 100;
+  const totalContrast = 1 + (userContrast + (sceneInfo.contrastBoost ?? 6)) / 100;
+  const totalSaturation = 1 + (userSaturation + (sceneInfo.saturationBoost ?? 4)) / 100;
+
+  const liveVideoFilter = `brightness(${Math.max(0.55, Math.min(1.4, totalBrightness)).toFixed(2)}) contrast(${Math.max(0.85, Math.min(1.5, totalContrast)).toFixed(2)}) saturate(${Math.max(0, Math.min(1.5, totalSaturation)).toFixed(2)})`;
 
   return (
     <div
       className={`fixed inset-0 z-50 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 transition-colors duration-300 ${
-        ringLightOn ? 'bg-amber-50/85' : 'bg-stone-950/75'
+        ringLightOn ? 'bg-amber-50/90' : 'bg-stone-950/80'
       }`}
     >
-      {/* Hardware-Accelerated SVG Optical Clarity & Unsharp Mask Filter for Live Video */}
-      <svg className="w-0 h-0 absolute pointer-events-none" aria-hidden="true">
-        <defs>
-          <filter id="studio-optical-focus" colorInterpolationFilters="sRGB">
-            {/* Mild 3x3 Unsharp Mask Kernel for instant optical clarity on blurry webcams */}
-            <feConvolveMatrix
-              order="3 3"
-              kernelMatrix="0 -0.35 0 -0.35 2.4 -0.35 0 -0.35 0"
-              preserveAlpha="true"
-            />
-          </filter>
-        </defs>
-      </svg>
-
       <div
         className="relative w-full max-w-xl bg-white rounded-3xl overflow-hidden shadow-2xl border border-stone-200 flex flex-col text-stone-800 transition-shadow duration-300"
         style={{
@@ -396,12 +380,12 @@ export default function CameraBooth({
               className={`px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1 border transition ${
                 ringLightOn
                   ? 'bg-amber-400 text-stone-950 border-amber-400 shadow-xs font-bold'
-                  : 'bg-stone-100 text-stone-500 border-stone-200'
+                  : 'bg-stone-100 text-stone-600 border-stone-200 hover:bg-stone-200'
               }`}
-              title="Lampu Layar Studio Penuh"
+              title="Nyalakan hanya saat ruangan sangat gelap"
             >
               <Sun className="w-3.5 h-3.5" />
-              <span>Lampu Studio {ringLightOn ? 'ON' : 'OFF'}</span>
+              <span>Ring Light {ringLightOn ? 'ON' : 'OFF'}</span>
             </button>
 
             <button
@@ -413,17 +397,17 @@ export default function CameraBooth({
           </div>
         </div>
 
-        {/* Clean Viewfinder with Tap-to-Focus & Live Auto-Lighting */}
+        {/* Clean Viewfinder with Tap-to-Focus & Bi-Directional Auto-Lighting */}
         <div className="p-3 bg-stone-100/60">
           <div
             onClick={handleViewfinderTap}
             className="relative aspect-[4/3] bg-stone-900 rounded-2xl overflow-hidden flex items-center justify-center transition-all cursor-crosshair select-none"
             style={{
               boxShadow: ringLightOn
-                ? 'inset 0 0 0 10px rgba(255, 245, 238, 0.92), 0 0 50px 15px rgba(255, 228, 210, 0.65)'
+                ? 'inset 0 0 0 8px rgba(255, 245, 238, 0.9), 0 0 40px 10px rgba(255, 228, 210, 0.5)'
                 : undefined
             }}
-            title="Klik pada wajah untuk mengunci Auto-Fokus & Cahaya"
+            title="Klik pada wajah untuk mengunci Auto-Fokus & menyesuaikan cahaya otomatis"
           >
             {flash && <div className="absolute inset-0 bg-white z-40" />}
 
@@ -459,16 +443,8 @@ export default function CameraBooth({
                   muted
                   className="w-full h-full object-cover"
                   style={{
-                    filter: `${filterStyle.filter || ''} ${liveAiFilter}`.trim(),
+                    filter: liveVideoFilter,
                     transform: isMirrored ? 'scaleX(-1)' : 'none'
-                  }}
-                />
-
-                {/* Soft Studio Radial Key-Light Overlay on Viewfinder */}
-                <div
-                  className="absolute inset-0 pointer-events-none z-10"
-                  style={{
-                    background: `radial-gradient(circle at ${focusPoint.x * 100}% ${focusPoint.y * 100}%, rgba(255,248,242,0.14) 0%, transparent 62%)`
                   }}
                 />
 
@@ -489,7 +465,6 @@ export default function CameraBooth({
                           : 'border-emerald-400/90 shadow-[0_0_10px_rgba(52,211,153,0.45)]'
                       }`}
                     >
-                      {/* Corner ticks */}
                       <div className="w-1.5 h-1.5 rounded-full bg-white/90" />
                       <Sun
                         className={`w-3.5 h-3.5 absolute -right-5 top-1/2 -translate-y-1/2 ${
@@ -501,10 +476,16 @@ export default function CameraBooth({
                 )}
 
                 {/* Live Auto-Focus & Auto-Cahaya Status Pill */}
-                <div className="absolute bottom-3 left-3 z-20 pointer-events-none flex items-center gap-1.5 bg-stone-900/70 backdrop-blur-xs text-white px-2.5 py-1 rounded-full text-[10px] font-semibold border border-white/15">
+                <div className="absolute bottom-3 left-3 z-20 pointer-events-none flex items-center gap-1.5 bg-stone-900/75 backdrop-blur-xs text-white px-2.5 py-1 rounded-full text-[10px] font-semibold border border-white/15">
                   <span
                     className={`w-2 h-2 rounded-full ${
-                      focusState === 'locking' ? 'bg-amber-400 animate-ping' : 'bg-emerald-400'
+                      focusState === 'locking'
+                        ? 'bg-amber-400 animate-ping'
+                        : sceneInfo.status === 'BRIGHT'
+                        ? 'bg-sky-400'
+                        : sceneInfo.status === 'LOW_LIGHT'
+                        ? 'bg-amber-400'
+                        : 'bg-emerald-400'
                     }`}
                   />
                   <span>{sceneInfo.label}</span>
