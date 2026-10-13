@@ -193,7 +193,9 @@ export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }) {
       label: 'AF • Auto-Cahaya Terkunci',
       boostNeeded: 0,
       contrastBoost: 6,
-      saturationBoost: 4
+      saturationBoost: 4,
+      gamma: 1.0,
+      dehazeFloor: 0
     };
   }
 
@@ -213,7 +215,7 @@ export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }) {
     let focusLum = 0;
     let focusCount = 0;
     let overexposedPixels = 0;
-    let darkPixels = 0;
+    const hist = new Uint16Array(256);
     const pixelCount = data.length / 4;
 
     // Focus region around user's tap point or center face area
@@ -226,11 +228,11 @@ export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }) {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
-      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      const lum = Math.min(255, Math.max(0, Math.round(0.299 * r + 0.587 * g + 0.114 * b)));
+      hist[lum]++;
       totalLum += lum;
 
-      if (lum > 210) overexposedPixels++;
-      if (lum < 50) darkPixels++;
+      if (lum > 215) overexposedPixels++;
 
       const pxIndex = i / 4;
       const x = pxIndex % sw;
@@ -241,62 +243,85 @@ export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }) {
       }
     }
 
+    // Find 8th-percentile luminance (black floor) to detect milky backlight haze
+    let acc = 0;
+    let p08 = 0;
+    const targetP08 = pixelCount * 0.08;
+    for (let v = 0; v < 256; v++) {
+      acc += hist[v];
+      if (acc >= targetP08) {
+        p08 = v;
+        break;
+      }
+    }
+
     const avgLum = totalLum / pixelCount;
-    const avgFocusLum = focusCount > 0 ? focusLum / focusCount : avgLum;
+    const rawFocusLum = focusCount > 0 ? focusLum / focusCount : avgLum;
+    // Blend 65% focus box + 35% global so tapping a bright wall doesn't crush the whole image
+    const avgFocusLum = rawFocusLum * 0.65 + avgLum * 0.35;
     const lumPct = Math.round((avgFocusLum / 255) * 100);
     const globalLumPct = Math.round((avgLum / 255) * 100);
     const overexposedPct = Math.round((overexposedPixels / pixelCount) * 100);
+    const dehazeFloor = Math.min(0.22, Math.max(0, ((p08 - 16) / 255) * 0.78));
 
-    // CASE 1: TOO BRIGHT / OVEREXPOSED / STRONG BACKLIGHT GLARE (like washed-out webcam in bright room)
-    // Pull brightness DOWN and boost contrast/dehaze strongly so face & background aren't white!
+    // CASE 1: TOO BRIGHT / OVEREXPOSED / STRONG BACKLIGHT GLARE
+    // Use non-linear gamma (1.16..1.38) + black-floor dehaze so midtone glare is toned down while whites stay clean white (NEVER grey!)
     if (lumPct > 62 || globalLumPct > 66 || overexposedPct > 24) {
       const excess = Math.max(lumPct - 54, globalLumPct - 56, overexposedPct - 10);
-      const darken = -Math.min(34, Math.max(12, Math.round(excess * 0.85)));
-      const contrastUp = Math.min(32, Math.max(16, Math.round(excess * 0.75)));
+      const gammaVal = Math.min(1.38, 1.14 + (excess / 45) * 0.24);
+      const contrastUp = Math.min(24, Math.max(12, Math.round(excess * 0.55)));
       return {
         luminance: lumPct,
         status: 'BRIGHT',
-        label: `Anti-Silau & Backlight (${darken}%)`,
-        boostNeeded: darken,
+        label: 'AF • Anti-Silau & Dehaze',
+        boostNeeded: -4,
         contrastBoost: contrastUp,
-        saturationBoost: 10
+        saturationBoost: 12,
+        gamma: Number(gammaVal.toFixed(2)),
+        dehazeFloor: Number(dehazeFloor.toFixed(3))
       };
     }
 
     // CASE 2: BACKLIT SILHOUETTE (Background is bright, but face in focus box is genuinely dark < 45%)
     if (globalLumPct - lumPct > 16 && lumPct < 45) {
-      const lift = Math.min(18, Math.max(6, Math.round((50 - lumPct) * 0.7)));
+      const lift = Math.min(14, Math.max(6, Math.round((50 - lumPct) * 0.6)));
       return {
         luminance: lumPct,
         status: 'BACKLIT',
-        label: `HDR Backlight Balance (+${lift}%)`,
+        label: `AF • HDR Backlight (+${lift}%)`,
         boostNeeded: lift,
-        contrastBoost: 16,
-        saturationBoost: 8
+        contrastBoost: 14,
+        saturationBoost: 10,
+        gamma: 0.88,
+        dehazeFloor: Number((dehazeFloor * 0.6).toFixed(3))
       };
     }
 
-    // CASE 3: DARK / LOW-LIGHT ROOM (Face is genuinely dark < 42% and scene isn't overexposed)
+    // CASE 3: DARK / LOW-LIGHT ROOM (Face is genuinely dark < 42%)
     if (lumPct < 42) {
-      const boost = Math.min(28, Math.max(8, Math.round((50 - lumPct) * 0.85)));
+      const boost = Math.min(20, Math.max(6, Math.round((48 - lumPct) * 0.7)));
       return {
         luminance: lumPct,
         status: 'LOW_LIGHT',
-        label: `Night Low-Light Boost (+${boost}%)`,
+        label: `AF • Night Low-Light (+${boost}%)`,
         boostNeeded: boost,
         contrastBoost: 10,
-        saturationBoost: 8
+        saturationBoost: 10,
+        gamma: 0.82,
+        dehazeFloor: 0
       };
     }
 
-    // CASE 4: BALANCED / NORMAL LIGHTING (42% - 62%) -> Do not over-brighten!
+    // CASE 4: BALANCED / NORMAL LIGHTING (42% - 62%)
     return {
       luminance: lumPct,
       status: 'OPTIMAL',
       label: 'AF • Cahaya Seimbang',
       boostNeeded: 0,
-      contrastBoost: 6,
-      saturationBoost: 4
+      contrastBoost: 8,
+      saturationBoost: 6,
+      gamma: 1.04,
+      dehazeFloor: Number((dehazeFloor * 0.5).toFixed(3))
     };
   } catch (e) {
     return {
@@ -305,7 +330,9 @@ export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }) {
       label: 'AF • Cahaya Seimbang',
       boostNeeded: 0,
       contrastBoost: 6,
-      saturationBoost: 4
+      saturationBoost: 4,
+      gamma: 1.0,
+      dehazeFloor: 0
     };
   }
 }

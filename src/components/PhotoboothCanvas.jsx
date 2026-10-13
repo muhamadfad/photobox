@@ -250,7 +250,7 @@ export default function PhotoboothCanvas({
           {currentTheme === 'poserbox_playlist' && (
             <div className="text-left pb-1.5 border-b border-current/20 mb-1 flex items-center justify-between">
               <span className="font-serif italic font-bold text-xs tracking-wide">
-                {custom.header || "Poserbox's Playlist"}
+                {custom.header || "Pikubooth's Playlist"}
               </span>
               <div className="flex items-center gap-1 opacity-50">
                 <span className="w-1.5 h-1.5 rounded-full bg-current" />
@@ -262,7 +262,7 @@ export default function PhotoboothCanvas({
           {/* 2. CHERISH MIDNIGHT CAT HEADER */}
           {currentTheme === 'cherish_cat' && (
             <div className="flex items-center justify-between pb-1.5 border-b border-sky-400/25 mb-1 text-[10px] font-mono text-sky-200">
-              <span className="tracking-wide font-semibold">{custom.handle || '@cherishphotobox'}</span>
+              <span className="tracking-wide font-semibold">{custom.handle || '@pikubooth'}</span>
               <div className="flex items-center gap-1 text-sky-300">
                 <FourPointStar className="w-2.5 h-2.5" />
                 <FourPointStar className="w-3.5 h-3.5 text-amber-200" />
@@ -281,7 +281,7 @@ export default function PhotoboothCanvas({
               ) : (
                 <div className="flex items-center justify-between pb-1.5 border-b-2 border-stone-900 mb-1">
                   <span className="text-[8px] font-mono font-black bg-stone-900 text-white px-1.5 py-0.5 rounded-xs tracking-wider">
-                    PHOTO PLACE
+                    PIKUBOOTH
                   </span>
                   <div className="flex items-center gap-1 text-stone-800">
                     <FourPointStar className="w-3 h-3 text-orange-500" />
@@ -296,7 +296,7 @@ export default function PhotoboothCanvas({
           {currentTheme === 'phetoria_sage' && (
             <div className="text-center pb-1.5 border-b border-white/25 mb-1 flex items-center justify-between text-white/95">
               <span className="text-[8px] font-mono tracking-[0.2em] uppercase font-bold">
-                {custom.stampSide || 'RETROBOOTH'}
+                {custom.stampSide || 'PIKUBOOTH'}
               </span>
               <FourPointStar className="w-2.5 h-2.5 text-amber-200" />
               <span className="text-[8px] font-mono tracking-[0.15em] uppercase font-bold">EST. 2026</span>
@@ -309,7 +309,7 @@ export default function PhotoboothCanvas({
               <div className="flex items-center justify-between text-[8.5px] font-serif text-amber-200/90 uppercase tracking-[0.2em] font-bold">
                 <span>{custom.ornament || 'EST. 2026'}</span>
                 <BrassLampSvg className="w-4 h-4" />
-                <span>{custom.header || 'PHOTO PLACE'}</span>
+                <span>{custom.header || 'PIKUBOOTH'}</span>
               </div>
             </div>
           )}
@@ -319,15 +319,15 @@ export default function PhotoboothCanvas({
             <div className="border-b-2 border-[#7c121d] pb-1.5 mb-1">
               <div className="flex items-center justify-between">
                 <h2 className="font-cursive text-2xl font-bold text-[#7c121d] leading-none">
-                  {custom.brand || "Sua Foto's"}
+                  {custom.brand || "Piku Foto's"}
                 </h2>
                 <span className="text-[8px] font-mono font-black bg-[#7c121d] text-white px-1.5 py-0.5 rounded-xs tracking-wider">
-                  {custom.city || 'MAKASSAR'}
+                  {custom.city || 'STUDIO'}
                 </span>
               </div>
               <div className="flex items-center justify-between mt-1">
                 <span className="text-[8px] font-mono font-black text-[#7c121d] tracking-wider">
-                  {custom.ticketTitle || 'SUAFOTO GOLDEN TICKET'}
+                  {custom.ticketTitle || 'PIKUBOOTH GOLDEN TICKET'}
                 </span>
                 <span className="text-[7.5px] font-mono font-bold text-[#7c121d]/80">
                   {custom.duration || 'SELAMANYA'}
@@ -363,7 +363,7 @@ export default function PhotoboothCanvas({
                 <span>★</span>
               </div>
               <h3 className="font-serif font-black text-xl tracking-[0.18em] text-[#0f172a] uppercase leading-none">
-                {custom.brand || 'PHOTOLOOKUP'}
+                {custom.brand || 'PIKULOOKUP'}
               </h3>
             </div>
           )}
@@ -380,7 +380,7 @@ export default function PhotoboothCanvas({
           {currentTheme === 'selfit_minimal' && (
             <div className="text-left pb-1.5 border-b border-stone-200 mb-1 flex items-baseline justify-between">
               <h3 className="font-serif italic text-lg font-bold text-stone-800 leading-none">
-                {custom.brand || 'selfit photostudio.'}
+                {custom.brand || 'pikubooth studio.'}
               </h3>
               <span className="text-[8px] text-stone-400 font-mono uppercase tracking-wider">
                 {custom.subtitle || 'quiet moments'}
@@ -394,7 +394,7 @@ export default function PhotoboothCanvas({
               <div className="flex items-center justify-center gap-2.5 text-white">
                 <FourPointStar className="w-3 h-3 text-sky-200" />
                 <h2 className="font-serif tracking-[0.25em] text-lg font-black uppercase text-white drop-shadow">
-                  {custom.brand || 'MOMENKU'}
+                  {custom.brand || 'PIKUBOOTH'}
                 </h2>
                 <FourPointStar className="w-3 h-3 text-sky-200" />
               </div>
@@ -460,7 +460,7 @@ export default function PhotoboothCanvas({
               ) : (
                 <div className="text-center pb-1.5 border-b border-white/20 mb-1">
                   <div className="text-[8.5px] font-mono uppercase tracking-[0.2em] text-white/90 mb-1 font-bold">
-                    {custom.groupName || 'MOMENKU GROUP'}
+                    {custom.groupName || 'PIKUBOOTH CLUB'}
                   </div>
                   <div className="flex items-center justify-center gap-1 text-white">
                     <Disc className="w-3 h-3 text-white shrink-0" />
@@ -488,7 +488,7 @@ export default function PhotoboothCanvas({
                 <span>★</span>
               </div>
               <h2 className="font-cursive text-3xl font-bold leading-tight">
-                {custom.title || 'Theather Show'}
+                {custom.title || 'Theater Show'}
               </h2>
               <div className="mt-1.5 grid grid-cols-3 border-t border-current text-[10px] font-serif uppercase tracking-tight divide-x divide-current">
                 <div className="py-0.5 text-center">
@@ -518,7 +518,7 @@ export default function PhotoboothCanvas({
                 <Cloud className="w-3.5 h-3.5 text-sky-500 fill-sky-200 inline" />
               </div>
               <h2 className="font-serif italic font-bold text-2xl tracking-wide text-sky-800 leading-none">
-                {custom.brand || 'haru film.'}
+                {custom.brand || 'piku film.'}
               </h2>
             </div>
           )}
@@ -543,7 +543,7 @@ export default function PhotoboothCanvas({
             <div className="pb-2 border-b border-neutral-800 mb-1 flex items-center justify-between">
               <div>
                 <h2 className="font-serif italic text-2xl font-black tracking-tight text-white leading-none">
-                  {custom.brand || 'photoism.'}
+                  {custom.brand || 'pikubooth.'}
                 </h2>
                 <p className="text-[8px] text-neutral-400 uppercase tracking-widest mt-0.5">
                   {custom.tag || 'self photostudio project'}
@@ -573,7 +573,7 @@ export default function PhotoboothCanvas({
           {currentTheme === 'boarding' && (
             <div className="pb-1.5 border-b-2 border-dashed border-[#601322]/40 mb-1">
               <div className="bg-[#601322] text-white px-2 py-1 rounded-xs flex items-center justify-between text-[9px] font-mono font-bold">
-                <span>{custom.airline || 'DETIK AIR'}</span>
+                <span>{custom.airline || 'PIKU AIR'}</span>
                 <span className="flex items-center gap-1">
                   <Plane className="w-3 h-3" />
                   <span>{custom.flight || 'GF 6815'}</span>
@@ -1078,7 +1078,7 @@ export default function PhotoboothCanvas({
           {currentTheme === 'phetoria_sage' && (
             <div className="pt-2 text-center text-white border-t border-white/25">
               <div className="font-serif font-black text-sm tracking-[0.2em] uppercase leading-none">
-                {custom.brand || 'PHETORIA'}
+                {custom.brand || 'PIKUBOOTH'}
               </div>
               <div className="text-[8px] font-mono tracking-widest text-white/80 mt-1 uppercase">
                 {custom.tagline || 'VINTAGE MEMORIES BOOTH'}
@@ -1104,7 +1104,7 @@ export default function PhotoboothCanvas({
           {currentTheme === 'suafoto_ticket' && (
             <div className="pt-1.5 border-t-2 border-[#7c121d] text-center text-[#7c121d]">
               <div className="text-[8.5px] font-serif italic font-bold tracking-wide mb-1">
-                {custom.footer || 'Manis - Manis Suafoto'}
+                {custom.footer || 'Manis - Manis Pikubooth'}
               </div>
               <BarcodeVector color="#7c121d" heightClass="h-4" count={32} />
             </div>
@@ -1115,7 +1115,7 @@ export default function PhotoboothCanvas({
             <div className="pt-1.5 border-t border-dashed border-stone-400 text-center font-mono">
               <BarcodeVector color="#1e385c" heightClass="h-4" count={34} />
               <span className="text-[7.5px] text-stone-600 font-bold block mt-1 tracking-wider">
-                BOARDING PASS • {custom.airline || "LION'S AIR"}
+                BOARDING PASS • {custom.airline || 'PIKU AIR'}
               </span>
             </div>
           )}
@@ -1137,7 +1137,7 @@ export default function PhotoboothCanvas({
           {/* 10. SELFIT STUDIO MINIMAL FOOTER */}
           {currentTheme === 'selfit_minimal' && (
             <div className="pt-1.5 border-t border-stone-200 text-stone-400 text-[8px] font-mono flex justify-between items-center">
-              <span>SELFIT ARCHIVE</span>
+              <span>PIKUBOOTH ARCHIVE</span>
               <span className="font-bold text-stone-600">{custom.date || 'OCT 2026'}</span>
             </div>
           )}
@@ -1166,7 +1166,7 @@ export default function PhotoboothCanvas({
                 <div className="flex items-center gap-1">
                   <FourPointStar className="w-3 h-3 text-sky-300" />
                   <h4 className="font-black text-xs tracking-wider uppercase leading-none">
-                    {custom.brand || 'ROBLOX PHOTOBOOTH'}
+                    {custom.brand || 'PIKU PHOTOBOOTH'}
                   </h4>
                 </div>
                 <span className="text-[7.5px] font-mono tracking-[0.2em] text-sky-200/90 font-bold block mt-0.5">
@@ -1265,12 +1265,12 @@ export default function PhotoboothCanvas({
           {currentTheme === 'theater' && (
             <div className="pt-1.5 border-t-2 border-current text-center">
               <div className="border-y border-current py-0.5 my-1">
-                <p className="text-[8px] font-serif uppercase tracking-wider font-bold truncate">
-                  {custom.ribbon || 'SAVE THE BEST MOMENT ★'}
+                <p className="text-[7.5px] font-serif uppercase tracking-wider font-bold">
+                  {custom.ribbon || '★ SAVE THE BEST MOMENT ★'}
                 </p>
               </div>
               <span className="font-serif italic text-xl font-black tracking-tight block leading-none">
-                {custom.studioName || 'kafastudio.'}
+                {custom.studioName || 'pikubooth.'}
               </span>
             </div>
           )}
@@ -1279,7 +1279,7 @@ export default function PhotoboothCanvas({
           {currentTheme === 'haru_cloud' && (
             <div className="pt-1.5 border-t border-sky-200 text-center text-sky-700 text-[9px] font-mono flex items-center justify-between">
               <span>{custom.date || '2026.10.12'}</span>
-              <span className="font-bold uppercase">{custom.studio || 'seoul photostudio'}</span>
+              <span className="font-bold uppercase">{custom.studio || 'pikubooth studio'}</span>
             </div>
           )}
 
@@ -1306,7 +1306,7 @@ export default function PhotoboothCanvas({
                 {custom.sub || 'BESTIES FOREVER ♡'}
               </div>
               <div className="flex justify-between items-center text-[8px] font-mono text-pink-600 mt-1 px-1 font-bold">
-                <span>SHIBUYA BOOTH</span>
+                <span>PIKUBOOTH</span>
                 <span>{custom.date || "’26 10.12"}</span>
               </div>
             </div>
@@ -1440,7 +1440,7 @@ export default function PhotoboothCanvas({
                 </div>
               </div>
               <div className="mt-1 text-[7.5px] text-neutral-500 flex justify-between border-t border-neutral-300 pt-1 font-bold">
-                <span className="text-blue-900">{custom.brand || 'MEENIE BOX!'}</span>
+                <span className="text-blue-900">{custom.brand || 'PIKU BOX!'}</span>
                 <span>{custom.postmark || 'AIRMAIL POSTAGE PAID'}</span>
               </div>
             </div>

@@ -9,17 +9,17 @@ export default function Header({
     <header className="bg-white/90 backdrop-blur-md border-b border-stone-200/70 sticky top-0 z-30">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
         
-        {/* Clean Minimal Brand Logo */}
+        {/* Cute Minimal Brand Logo: pikubooth. */}
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-stone-900 text-white flex items-center justify-center shadow-xs">
-            <Sparkles className="w-4 h-4 text-rose-400" />
+          <div className="w-8 h-8 rounded-xl bg-rose-500 text-white flex items-center justify-center shadow-xs font-serif italic font-black text-base select-none">
+            p.
           </div>
           <div className="flex items-baseline gap-2">
             <h1 className="text-stone-900 font-extrabold text-base tracking-tight m-0">
-              haru<span className="text-rose-500">.</span>
+              piku<span className="text-rose-500">booth.</span>
             </h1>
             <span className="text-[11px] text-stone-400 font-medium hidden sm:inline">
-              self-photo studio
+              cute self-photo box
             </span>
           </div>
         </div>

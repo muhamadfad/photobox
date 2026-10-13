@@ -10,7 +10,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
         <div className={`w-full aspect-[9/14] bg-[#1e385c] p-1 rounded-sm relative flex flex-col justify-between overflow-hidden shadow-inner border border-dashed border-sky-300/50 ${className}`}>
           <div className="text-center pt-0.5">
             <span className="text-[5.5px] font-serif font-black tracking-widest text-white uppercase block">
-              ★ MOMENKU ★
+              ★ PIKUBOOTH ★
             </span>
           </div>
           <div className="flex flex-col gap-1 my-1">
@@ -53,7 +53,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
             ))}
           </div>
           <div className="flex justify-between items-center text-white px-0.5 border-t border-white/70 pt-0.5">
-            <span className="text-[4.5px] font-black uppercase tracking-tighter">ROBLOX</span>
+            <span className="text-[4.5px] font-black uppercase tracking-tighter">PIKU</span>
             <span className="text-[8px] font-black text-sky-300 leading-none">XXL</span>
           </div>
         </div>
@@ -141,7 +141,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
       return (
         <div className={`w-full aspect-[9/14] bg-[#38383a] p-1 rounded-sm relative flex flex-col justify-between overflow-hidden shadow-inner text-white ${className}`}>
           <div className="text-[5px] font-serif italic pb-0.5 border-b border-white/20">
-            Poserbox's Playlist
+            Pikubooth's Playlist
           </div>
           <div className="flex flex-col gap-1 my-0.5">
             {[...Array(3)].map((_, i) => (
@@ -167,7 +167,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
       return (
         <div className={`w-full aspect-[9/14] bg-[#132238] p-1 rounded-sm relative flex flex-col justify-between overflow-hidden shadow-inner text-white ${className}`}>
           <div className="text-[4.5px] font-mono text-sky-300 pb-0.5 border-b border-sky-400/20">
-            @cherishphotobox
+            @pikubooth
           </div>
           <div className="flex flex-col gap-1 my-0.5 relative">
             <span className="absolute right-0 top-1 text-[7px] text-sky-300 font-black italic">16</span>
@@ -189,7 +189,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
       return (
         <div className={`w-full aspect-[9/14] bg-white p-1 rounded-sm relative flex flex-col justify-between overflow-hidden shadow-inner text-black border border-stone-300 ${className}`}>
           <div className="flex justify-between items-center text-[4px] font-mono border-b border-stone-200 pb-0.5">
-            <span className="bg-black text-white px-0.5 rounded-2xs font-bold">PHOTO</span>
+            <span className="bg-black text-white px-0.5 rounded-2xs font-bold">PIKU</span>
             <span>SUNSET CHASER</span>
           </div>
           <div className="flex flex-col gap-0.5 my-0.5">
@@ -221,7 +221,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
             ))}
           </div>
           <div className="text-center text-[5px] font-mono font-bold border-t border-white/20 pt-0.5">
-            PHETORIA • BOOTH
+            PIKUBOOTH • STUDIO
           </div>
         </div>
       );
@@ -231,7 +231,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
       return (
         <div className={`w-full aspect-[9/14] bg-[#361e11] p-1 rounded-sm relative flex flex-col justify-between overflow-hidden shadow-inner text-amber-100 ${className}`}>
           <div className="text-center text-[4.5px] font-serif border-b border-amber-600/30 pb-0.5 tracking-widest">
-            ✦ PHOTO PLACE ✦
+            ✦ PIKUBOOTH ✦
           </div>
           <div className="flex flex-col gap-1 my-0.5">
             {[...Array(3)].map((_, i) => (
@@ -252,7 +252,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
         <div className={`w-full aspect-[9/14] bg-[#7c121d] p-1 rounded-sm relative flex flex-col justify-between overflow-hidden shadow-inner text-[#7c121d] ${className}`}>
           <div className="bg-[#fefcf8] rounded p-1 h-full flex flex-col justify-between">
             <div className="border-b border-[#7c121d] pb-0.5">
-              <span className="font-cursive text-[7px] font-bold block leading-none">Sua Foto's</span>
+              <span className="font-cursive text-[7px] font-bold block leading-none">Piku Foto's</span>
               <span className="text-[4px] font-mono font-black block">GOLDEN TICKET</span>
             </div>
             <div className="flex flex-col gap-0.5 my-0.5">
@@ -263,7 +263,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
               ))}
             </div>
             <div className="text-[4.5px] font-mono text-center border-t border-[#7c121d] pt-0.5 font-bold">
-              MAKASSAR SELAMANYA
+              PIKUBOOTH SELAMANYA
             </div>
           </div>
         </div>
@@ -300,7 +300,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
           <div className="bg-[#f8fafc] rounded p-1 h-full flex flex-col justify-between text-center">
             <div className="border-b border-stone-300 pb-0.5">
               <span className="text-[4px] text-red-600 block">★ 2026 ★</span>
-              <span className="font-serif font-black text-[6.5px] block tracking-wide">PHOTOLOOKUP</span>
+              <span className="font-serif font-black text-[6.5px] block tracking-wide">PIKULOOKUP</span>
             </div>
             <div className="flex flex-col gap-0.5 my-0.5">
               {[...Array(3)].map((_, i) => (
@@ -342,7 +342,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
         <div className={`w-full aspect-[9/14] bg-[#e7e5e4] p-1 rounded-sm relative flex flex-col justify-between overflow-hidden shadow-inner text-stone-800 ${className}`}>
           <div className="bg-white rounded p-1 h-full flex flex-col justify-between">
             <div className="border-b border-stone-100 pb-0.5">
-              <span className="font-serif italic font-bold text-[6px] block">selfit photostudio.</span>
+              <span className="font-serif italic font-bold text-[6px] block">pikubooth studio.</span>
             </div>
             <div className="flex flex-col gap-0.5 my-0.5">
               {[...Array(4)].map((_, i) => (
@@ -377,7 +377,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
           <div className="bg-[#fdfbf3] border border-[#54121d] rounded p-1 h-full flex flex-col justify-between mx-1">
             <div className="text-center border-b border-[#54121d] pb-0.5">
               <span className="text-[5px] text-[#54121d] block">★★★</span>
-              <span className="font-cursive text-[9px] text-[#54121d] font-bold leading-none block">Theather</span>
+              <span className="font-cursive text-[9px] text-[#54121d] font-bold leading-none block">Theater</span>
             </div>
             <div className="flex flex-col gap-1 my-1">
               {[...Array(4)].map((_, i) => (
@@ -387,7 +387,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
               ))}
             </div>
             <div className="text-[5px] text-center font-serif text-[#54121d] font-bold border-t border-[#54121d] pt-0.5">
-              kafastudio.
+              pikubooth.
             </div>
           </div>
         </div>
@@ -399,7 +399,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
         <div className={`w-full aspect-[9/14] bg-[#601322] p-1 rounded-lg relative flex flex-col overflow-hidden shadow ${className}`}>
           <div className="bg-white rounded p-1 h-full flex flex-col justify-between">
             <div className="bg-[#601322] text-white px-1 py-0.5 rounded text-[5px] font-mono flex justify-between font-bold">
-              <span>DETIK AIR ✈</span>
+              <span>PIKU AIR ✈</span>
               <span>USA➔CN</span>
             </div>
             <div className="text-[8px] font-black text-center my-0.5">USA ✈ CN</div>
@@ -502,7 +502,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
       return (
         <div className={`w-full aspect-[9/14] bg-gradient-to-b from-sky-400 to-sky-200 p-1 rounded-xl relative flex flex-col justify-between overflow-hidden shadow ${className}`}>
           <div className="text-center pt-0.5">
-            <div className="text-[5px] text-sky-900 font-sans tracking-widest font-bold">✦ HARU FILM ✦</div>
+            <div className="text-[5px] text-sky-900 font-sans tracking-widest font-bold">✦ PIKU FILM ✦</div>
           </div>
           <div className="flex flex-col gap-1 my-1">
             {[...Array(4)].map((_, i) => (
@@ -514,7 +514,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
             ))}
           </div>
           <div className="text-center text-[5px] font-mono text-sky-800 font-bold">
-            2026.10.12 • SEOUL
+            2026.10.12 • STUDIO
           </div>
         </div>
       );
@@ -547,7 +547,7 @@ export default function TemplateThumbnail({ templateId, template, className = ''
       return (
         <div className={`w-full aspect-[9/14] bg-[#09090b] p-1.5 rounded border border-neutral-800 flex flex-col justify-between overflow-hidden shadow ${className}`}>
           <div className="flex justify-between items-center text-white pb-0.5 border-b border-neutral-800">
-            <span className="font-serif italic font-bold text-[8px]">photoism.</span>
+            <span className="font-serif italic font-bold text-[8px]">pikubooth.</span>
             <span className="text-[4px] font-mono text-neutral-400">SEOUL</span>
           </div>
           <div className="flex flex-col gap-1 my-1">

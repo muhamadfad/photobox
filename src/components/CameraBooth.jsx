@@ -325,19 +325,22 @@ export default function CameraBooth({
 
   if (!isOpen) return null;
 
-  // Bi-directional live auto-exposure compensation:
-  // - If BRIGHT/BACKLIT (boostNeeded < 0): lowers brightness & boosts contrast to remove glare
-  // - If LOW_LIGHT (boostNeeded > 0): lifts brightness & adds contrast
-  // - If OPTIMAL (boostNeeded === 0): keeps natural exposure
+  // Bi-directional live auto-exposure compensation with Non-Linear Gamma & Black-Floor Dehaze:
+  // Keeps whites clean (255) and blacks deep (0) instead of turning bright scenes into flat grey!
   const userBrightness = sceneInfo.status === 'BRIGHT' ? Math.min(0, filterSettings?.brightness || 0) : (filterSettings?.brightness || 0);
   const userContrast = filterSettings?.contrast || 0;
   const userSaturation = filterSettings?.saturation || 0;
 
   const totalBrightness = 1 + (userBrightness + (sceneInfo.boostNeeded ?? 0)) / 100;
-  const totalContrast = 1 + (userContrast + (sceneInfo.contrastBoost ?? 6)) / 100;
-  const totalSaturation = 1 + (userSaturation + (sceneInfo.saturationBoost ?? 4)) / 100;
+  const totalContrast = 1 + (userContrast + (sceneInfo.contrastBoost ?? 8)) / 100;
+  const totalSaturation = 1 + (userSaturation + (sceneInfo.saturationBoost ?? 6)) / 100;
 
-  const liveVideoFilter = `brightness(${Math.max(0.55, Math.min(1.4, totalBrightness)).toFixed(2)}) contrast(${Math.max(0.85, Math.min(1.5, totalContrast)).toFixed(2)}) saturate(${Math.max(0, Math.min(1.5, totalSaturation)).toFixed(2)})`;
+  const dehazeFloor = sceneInfo.dehazeFloor ?? 0;
+  const dehazeSlope = Number((1 / Math.max(0.5, 1 - dehazeFloor)).toFixed(3));
+  const dehazeIntercept = Number((-dehazeFloor * dehazeSlope).toFixed(3));
+  const liveGamma = sceneInfo.gamma ?? 1.04;
+
+  const liveVideoFilter = `url(#pikubooth-live-isp) brightness(${Math.max(0.92, Math.min(1.25, totalBrightness)).toFixed(2)}) contrast(${Math.max(0.95, Math.min(1.38, totalContrast)).toFixed(2)}) saturate(${Math.max(0, Math.min(1.45, totalSaturation)).toFixed(2)})`;
 
   return (
     <div
@@ -345,6 +348,22 @@ export default function CameraBooth({
         ringLightOn ? 'bg-amber-50/90' : 'bg-stone-950/80'
       }`}
     >
+      {/* Hardware-accelerated SVG ISP Filter: Subtracts milky webcam glare floor & applies smooth Gamma curve without greying out whites */}
+      <svg width="0" height="0" className="absolute pointer-events-none" aria-hidden="true">
+        <filter id="pikubooth-live-isp" colorInterpolationFilters="sRGB">
+          <feComponentTransfer>
+            <feFuncR type="linear" slope={dehazeSlope} intercept={dehazeIntercept} />
+            <feFuncG type="linear" slope={dehazeSlope} intercept={dehazeIntercept} />
+            <feFuncB type="linear" slope={dehazeSlope} intercept={dehazeIntercept} />
+          </feComponentTransfer>
+          <feComponentTransfer>
+            <feFuncR type="gamma" amplitude="1" exponent={liveGamma} offset="0" />
+            <feFuncG type="gamma" amplitude="1" exponent={liveGamma} offset="0" />
+            <feFuncB type="gamma" amplitude="1" exponent={liveGamma} offset="0" />
+          </feComponentTransfer>
+        </filter>
+      </svg>
+
       <div
         className="relative w-full max-w-xl bg-white rounded-3xl overflow-hidden shadow-2xl border border-stone-200 flex flex-col text-stone-800 transition-shadow duration-300"
         style={{

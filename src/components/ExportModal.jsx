@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Printer, Check, X, Loader2 } from 'lucide-react';
+import { Download, Printer, Check, X, Loader2, Sparkles, Image as ImageIcon } from 'lucide-react';
 import { toCanvas } from 'html-to-image';
 import { drawPhotoWithFiltersToCanvas } from '../utils/filterEngine';
 import confetti from 'canvas-confetti';
@@ -16,24 +16,35 @@ export default function ExportModal({
 }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
-  const [blobUrl, setBlobUrl] = useState(null);
-  const [imageFile, setImageFile] = useState(null);
-  const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [pngBlobUrl, setPngBlobUrl] = useState(null);
+  const [jpegBlobUrl, setJpegBlobUrl] = useState(null);
+  const [pngFile, setPngFile] = useState(null);
+  const [jpegFile, setJpegFile] = useState(null);
+  const [downloadSuccess, setDownloadSuccess] = useState(null); // 'png' | 'jpeg' | null
 
-  const safeFilename = `${templateName
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')}-photobooth.png`;
+  const baseSlug =
+    templateName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '') || 'pikubooth';
+  const pngFilename = `${baseSlug}-pikubooth-hd.png`;
+  const jpegFilename = `${baseSlug}-pikubooth.jpg`;
 
-  // Pre-generate the high-res image as soon as the modal opens so iOS download is 100% synchronous & instant
+  // Pre-generate both Ultra-HD PNG and JPEG Blobs as soon as modal opens
+  // so clicking Download PNG Maksimal or Download JPEG is 100% instant & synchronous (works on iOS Safari & Android & PC)
   useEffect(() => {
     if (!isOpen) {
       setPreviewUrl(null);
-      setImageFile(null);
-      setDownloadSuccess(false);
-      if (blobUrl) {
-        URL.revokeObjectURL(blobUrl);
-        setBlobUrl(null);
+      setPngFile(null);
+      setJpegFile(null);
+      setDownloadSuccess(null);
+      if (pngBlobUrl) {
+        URL.revokeObjectURL(pngBlobUrl);
+        setPngBlobUrl(null);
+      }
+      if (jpegBlobUrl) {
+        URL.revokeObjectURL(jpegBlobUrl);
+        setJpegBlobUrl(null);
       }
       return;
     }
@@ -138,8 +149,8 @@ export default function ExportModal({
           el.style.display = 'none';
         });
 
-        // Use 2x Retina resolution so iOS Safari WebKit never hits canvas memory limits
-        const ratio = 2;
+        // High-DPI ratio (2.5x Ultra-HD, safe on both iOS Safari WebKit and Desktop)
+        const ratio = 2.5;
         const bgColor = '#f8f7f4';
 
         let canvas;
@@ -236,21 +247,31 @@ export default function ExportModal({
 
         if (cancelled) return;
 
-        // 6. Generate both Preview DataURL and Blob URL (iOS Safari requires Blob URL instead of large DataURL)
+        // 6. Generate Preview + Both PNG (Kualitas Maksimal) & JPEG (Ukuran Ringan) Blob URLs
         const dataUrl = canvas.toDataURL('image/png');
         setPreviewUrl(dataUrl);
 
         canvas.toBlob((blob) => {
           if (!blob || cancelled) return;
           const url = URL.createObjectURL(blob);
-          setBlobUrl(url);
+          setPngBlobUrl(url);
           try {
-            const file = new File([blob], safeFilename, { type: 'image/png' });
-            setImageFile(file);
-          } catch (e) {
-            // Older browsers without File constructor
-          }
+            setPngFile(new File([blob], pngFilename, { type: 'image/png' }));
+          } catch (e) {}
         }, 'image/png');
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob || cancelled) return;
+            const url = URL.createObjectURL(blob);
+            setJpegBlobUrl(url);
+            try {
+              setJpegFile(new File([blob], jpegFilename, { type: 'image/jpeg' }));
+            } catch (e) {}
+          },
+          'image/jpeg',
+          0.95
+        );
 
         setIsGenerating(false);
       } catch (err) {
@@ -288,128 +309,168 @@ export default function ExportModal({
     (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
-  const handleDownloadClick = async (e) => {
-    // On iOS, if Web Share API with files is supported, offer native "Save Image" sheet on iOS,
-    // otherwise let the native <a href={blobUrl} download> trigger synchronously!
-    if (isIOS && imageFile && navigator.canShare && navigator.canShare({ files: [imageFile] })) {
+  const handleDownloadClick = async (e, formatType) => {
+    const fileToShare = formatType === 'jpeg' ? jpegFile : pngFile;
+    const fallbackUrl = formatType === 'jpeg' ? jpegBlobUrl || previewUrl : pngBlobUrl || previewUrl;
+    const filename = formatType === 'jpeg' ? jpegFilename : pngFilename;
+
+    if (isIOS && fileToShare && navigator.canShare && navigator.canShare({ files: [fileToShare] })) {
       e.preventDefault();
       try {
         await navigator.share({
-          files: [imageFile],
+          files: [fileToShare],
           title: templateName
         });
-        triggerSuccessFeedback();
+        triggerSuccessFeedback(formatType);
         return;
       } catch (err) {
         if (err?.name === 'AbortError') return;
-        // If share failed, fall back to direct blob download
-        if (blobUrl || previewUrl) {
+        if (fallbackUrl) {
           const link = document.createElement('a');
-          link.href = blobUrl || previewUrl;
-          link.download = safeFilename;
+          link.href = fallbackUrl;
+          link.download = filename;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
         }
       }
     }
-    triggerSuccessFeedback();
+    triggerSuccessFeedback(formatType);
   };
 
-  const triggerSuccessFeedback = () => {
-    setDownloadSuccess(true);
+  const triggerSuccessFeedback = (formatType) => {
+    setDownloadSuccess(formatType);
     confetti({
-      particleCount: 90,
-      spread: 75,
+      particleCount: 95,
+      spread: 80,
       origin: { y: 0.55 }
     });
-    setTimeout(() => setDownloadSuccess(false), 3000);
+    setTimeout(() => setDownloadSuccess(null), 3000);
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/65 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-      <div className="bg-white border border-stone-200/90 rounded-3xl p-5 sm:p-6 max-w-sm w-full shadow-2xl relative text-stone-800 flex flex-col items-center text-center animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white border border-stone-200/90 rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl relative text-stone-800 flex flex-col items-center text-center animate-in fade-in zoom-in-95 duration-200">
         
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-3.5 right-3.5 p-2 text-stone-400 hover:text-stone-700 rounded-full bg-stone-100 hover:bg-stone-200 transition"
+          className="absolute top-4 right-4 p-2 text-stone-400 hover:text-stone-700 rounded-full bg-stone-100 hover:bg-stone-200 transition"
           aria-label="Tutup"
         >
           <X className="w-4 h-4" />
         </button>
 
-        <h3 className="text-base sm:text-lg font-extrabold text-stone-900 mb-0.5">
-          Simpan Hasil Foto
+        {/* Icon & Title */}
+        <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-500 border border-rose-100 flex items-center justify-center shadow-xs mb-2.5">
+          <Sparkles className="w-6 h-6" />
+        </div>
+
+        <h3 className="text-lg sm:text-xl font-bold text-stone-800 mb-1">
+          Simpan Photobooth Anda
         </h3>
-        <p className="text-stone-500 text-xs mb-3">
-          Kualitas HD siap simpan ke galeri atau cetak
+        <p className="text-stone-500 text-xs mb-3.5 max-w-xs leading-relaxed">
+          Export foto kualitas tinggi (Ultra-HD 300 DPI), siap cetak atau share ke Instagram & TikTok!
         </p>
 
-        {/* Live Rendered Image Preview Box (Supports Long-Press Save on iOS) */}
-        <div className="w-full bg-stone-100 border border-stone-200/80 rounded-2xl p-3 mb-4 flex flex-col items-center justify-center min-h-[210px] max-h-[280px] overflow-hidden">
+        {/* Compact Live Preview Box */}
+        <div className="w-full bg-stone-100 border border-stone-200/80 rounded-2xl p-2.5 mb-4 flex flex-col items-center justify-center min-h-[140px] max-h-[185px] overflow-hidden">
           {isGenerating || !previewUrl ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-8 text-stone-500">
-              <Loader2 className="w-6 h-6 animate-spin text-rose-500" />
-              <span className="text-xs font-medium">Menyiapkan foto kualitas HD...</span>
+            <div className="flex flex-col items-center justify-center gap-2 py-5 text-stone-500">
+              <Loader2 className="w-5 h-5 animate-spin text-rose-500" />
+              <span className="text-xs font-medium">Menyiapkan kualitas maksimal (Ultra-HD)...</span>
             </div>
           ) : (
             <img
               src={previewUrl}
-              alt="Hasil Photobooth HD"
-              className="max-h-[245px] w-auto object-contain rounded-lg shadow-sm select-auto"
+              alt="Preview Photobooth"
+              className="max-h-[160px] w-auto object-contain rounded-lg shadow-xs select-auto"
             />
           )}
         </div>
 
-        {/* Single Clear Primary Download Button */}
-        <div className="w-full space-y-2">
-          {isGenerating || (!blobUrl && !previewUrl) ? (
+        {/* Complete Download & Print Buttons */}
+        <div className="w-full space-y-2.5">
+          {/* 1. Download PNG (Kualitas Maksimal) */}
+          {isGenerating || (!pngBlobUrl && !previewUrl) ? (
             <button
               disabled
               className="w-full py-3.5 px-4 rounded-xl bg-rose-500/60 text-white font-bold text-sm flex items-center justify-center gap-2 cursor-wait"
             >
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Memproses Foto...</span>
+              <span>Memproses High-Res...</span>
             </button>
           ) : (
             <a
-              href={blobUrl || previewUrl}
-              download={safeFilename}
-              onClick={handleDownloadClick}
-              className="w-full py-3.5 px-4 rounded-xl bg-rose-500 hover:bg-rose-600 active:scale-[0.99] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition no-underline"
+              href={pngBlobUrl || previewUrl}
+              download={pngFilename}
+              onClick={(e) => handleDownloadClick(e, 'png')}
+              className="w-full py-3.5 px-4 rounded-xl bg-rose-500 hover:bg-rose-600 active:scale-[0.99] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xs transition no-underline"
             >
-              {downloadSuccess ? (
+              {downloadSuccess === 'png' ? (
                 <>
                   <Check className="w-4 h-4" />
-                  <span>Berhasil Disimpan!</span>
+                  <span>PNG Berhasil Tersimpan!</span>
                 </>
               ) : (
                 <>
                   <Download className="w-4 h-4" />
-                  <span>Simpan Foto (Kualitas HD)</span>
+                  <span>Download PNG (Kualitas Maksimal)</span>
                 </>
               )}
             </a>
           )}
 
-          {/* Print option only shown on desktop/tablet screens */}
+          {/* 2. Download JPEG (Ukuran File Ringan) */}
+          {isGenerating || (!jpegBlobUrl && !previewUrl) ? (
+            <button
+              disabled
+              className="w-full py-3 px-4 rounded-xl bg-stone-100 text-stone-400 font-semibold text-xs flex items-center justify-center gap-2 border border-stone-200 cursor-wait"
+            >
+              <ImageIcon className="w-4 h-4" />
+              <span>Download JPEG (Ukuran File Ringan)</span>
+            </button>
+          ) : (
+            <a
+              href={jpegBlobUrl || previewUrl}
+              download={jpegFilename}
+              onClick={(e) => handleDownloadClick(e, 'jpeg')}
+              className="w-full py-3 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 active:scale-[0.99] text-stone-700 font-semibold text-xs flex items-center justify-center gap-2 border border-stone-200 transition no-underline"
+            >
+              {downloadSuccess === 'jpeg' ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-600" />
+                  <span className="text-emerald-700 font-bold">JPEG Berhasil Tersimpan!</span>
+                </>
+              ) : (
+                <>
+                  <ImageIcon className="w-4 h-4 text-stone-500" />
+                  <span>Download JPEG (Ukuran File Ringan)</span>
+                </>
+              )}
+            </a>
+          )}
+
+          {/* 3. Cetak Langsung (Print Photostrip) - Visible on ALL devices */}
           <button
-            onClick={() => window.print()}
-            className="hidden sm:flex w-full py-2.5 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 font-semibold text-xs items-center justify-center gap-1.5 border border-stone-200/80 transition"
+            onClick={handlePrint}
+            className="w-full py-3 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 active:scale-[0.99] text-stone-700 font-semibold text-xs flex items-center justify-center gap-2 border border-stone-200 transition"
           >
-            <Printer className="w-3.5 h-3.5 text-stone-500" />
-            <span>Cetak Langsung (Print)</span>
+            <Printer className="w-4 h-4 text-stone-500" />
+            <span>Cetak Langsung (Print Photostrip)</span>
           </button>
         </div>
 
-        <p className="mt-3 text-[11px] text-stone-400 leading-snug">
-          {isIOS
-            ? 'Tip iPhone/iOS: Klik tombol di atas lalu pilih "Save Image", atau tekan & tahan gambar preview untuk simpan ke Galeri.'
-            : 'Foto otomatis tersimpan dalam resolusi tinggi (HD PNG).'}
-        </p>
+        <div className="mt-4 text-[11px] text-stone-400 leading-snug">
+          Tip: Gunakan kertas foto glossy 4x6 atau 2x6 inci untuk hasil cetak asli seperti di studio!
+        </div>
 
       </div>
     </div>
   );
 }
+

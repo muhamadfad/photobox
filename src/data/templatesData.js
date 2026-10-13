@@ -16,17 +16,17 @@ export const TEMPLATES_LIST = [
     id: 'denim_1989',
     name: "1989 Taylor's Denim",
     category: 'viral_momenku',
-    tag: 'Momenku 1989',
+    tag: 'Piku 1989',
     badge: 'Viral',
     defaultBg: '#1e385c',
     cardBg: '#1b3353',
     textColor: '#ffffff',
     theme: 'denim_1989',
-    description: 'Denim jeans biru tua dengan jahitan benang putih, bintang bordir, logo MOMENKU dan 1989 Taylor\'s Version.',
+    description: 'Denim jeans biru tua dengan jahitan benang putih, bintang bordir, logo PIKUBOOTH dan 1989 Taylor\'s Version.',
     slots: 3,
     aspect: 'Strip 3-Foto',
     customFields: {
-      brand: 'MOMENKU',
+      brand: 'PIKUBOOTH',
       album: '1989',
       version: "TAYLOR'S VERSION"
     }
@@ -41,14 +41,14 @@ export const TEMPLATES_LIST = [
     cardBg: '#10233f',
     textColor: '#ffffff',
     theme: 'roblox_xxl',
-    description: 'Awan nebula biru malam dengan divider lirik lagu, doodle bintang, dan logo XXL Roblox Photobooth.',
+    description: 'Awan nebula biru malam dengan divider lirik lagu, doodle bintang, dan logo XXL Piku Photobooth.',
     slots: 4,
     aspect: 'Strip 4-Foto',
     customFields: {
       lyric1: 'I still remember, I will forever',
       lyric2: "Backseat secrets, we won't ever tell,",
       lyric3: 'I miss you double XL',
-      brand: 'ROBLOX PHOTOBOOTH',
+      brand: 'PIKU PHOTOBOOTH',
       edition: 'XXL'
     }
   },
@@ -103,7 +103,7 @@ export const TEMPLATES_LIST = [
     slots: 3,
     aspect: 'Music Twin',
     customFields: {
-      groupName: 'MOMENKU GROUP',
+      groupName: 'PIKUBOOTH CLUB',
       headline: "I'M SUCH A",
       bigWord: 'FOOL',
       subline: 'FOR YOU'
@@ -113,19 +113,19 @@ export const TEMPLATES_LIST = [
   // ===================== 2. PINTEREST HITS (6 ASLI DARI REFERENSI) =====================
   {
     id: 'poserbox_playlist',
-    name: "Poserbox's Minimal Playlist",
+    name: "Pikubooth's Minimal Playlist",
     category: 'pinterest_popular',
-    tag: 'Poserbox Kiosk',
+    tag: 'Pikubooth Kiosk',
     badge: 'Pinterest Hit',
     defaultBg: '#38383a',
     cardBg: '#2c2c2e',
     textColor: '#ffffff',
     theme: 'poserbox_playlist',
-    description: 'Photobooth minimalis Poserbox: Strip kiri matte charcoal (The 1975), Strip kanan crisp white (The Police) dengan player musik otentik.',
+    description: 'Photobooth minimalis Pikubooth: Strip kiri matte charcoal (The 1975), Strip kanan crisp white (The Police) dengan player musik otentik.',
     slots: 3,
     aspect: 'Playlist Twin',
     customFields: {
-      header: "Poserbox's Playlist",
+      header: "Pikubooth's Playlist",
       song1: 'ABOUT YOU',
       artist1: 'The 1975',
       song2: 'EVERY BREATH YOU TAKE',
@@ -134,7 +134,7 @@ export const TEMPLATES_LIST = [
   },
   {
     id: 'cherish_cat',
-    name: 'Cherish Midnight Cat "Bercinta"',
+    name: 'Midnight Cat "Bercinta"',
     category: 'pinterest_popular',
     tag: 'Donne Maula',
     badge: 'Trending',
@@ -142,11 +142,11 @@ export const TEMPLATES_LIST = [
     cardBg: '#132238',
     textColor: '#ffffff',
     theme: 'cherish_cat',
-    description: 'Photobooth navy midnight @cherishphotobox dengan pemutar lagu Donne Maula, stiker kucing hitam intip, dan kaligrafi emas One year down forever to go.',
+    description: 'Photobooth navy midnight @pikubooth dengan pemutar lagu Donne Maula, stiker kucing hitam intip, dan kaligrafi emas One year down forever to go.',
     slots: 3,
     aspect: 'Strip 3-Foto',
     customFields: {
-      handle: '@cherishphotobox',
+      handle: '@pikubooth',
       badgeNum: '16',
       song: 'Bercinta lewat kata',
       artist: 'Donne Maula',
@@ -175,7 +175,7 @@ export const TEMPLATES_LIST = [
   },
   {
     id: 'phetoria_sage',
-    name: 'Phetoria Vintage Sage Green',
+    name: 'Pikubooth Vintage Sage Green',
     category: 'pinterest_popular',
     tag: 'Warm Olive Sage',
     badge: 'Popular',
@@ -183,11 +183,11 @@ export const TEMPLATES_LIST = [
     cardBg: '#465e3e',
     textColor: '#ffffff',
     theme: 'phetoria_sage',
-    description: 'Warna hijau sage olive hangat khas studio Phetoria dengan stempel tepi RETROBOOTH dan tipografi minimalis VINTAGE MEMORIES BOOTH.',
+    description: 'Warna hijau sage olive hangat khas studio Pikubooth dengan stempel tepi RETROBOOTH dan tipografi minimalis VINTAGE MEMORIES BOOTH.',
     slots: 3,
     aspect: 'Studio Strip',
     customFields: {
-      brand: 'PHETORIA',
+      brand: 'PIKUBOOTH',
       tagline: 'VINTAGE MEMORIES BOOTH',
       stampSide: 'RETROBOOTH'
     }
@@ -206,37 +206,37 @@ export const TEMPLATES_LIST = [
     slots: 3,
     aspect: 'Mahogany Strip',
     customFields: {
-      header: 'PHOTO PLACE',
+      header: 'PIKU PLACE',
       title: 'Vintage Special',
       ornament: 'EST. 2026'
     }
   },
   {
     id: 'suafoto_ticket',
-    name: 'Sua Foto Candy Ticket',
+    name: 'Piku Candy Golden Ticket',
     category: 'pinterest_popular',
-    tag: 'Makassar Selamanya',
+    tag: 'Sweet Memories',
     badge: 'Iconic',
     defaultBg: '#7c121d',
     cardBg: '#fefcf8',
     textColor: '#7c121d',
     theme: 'suafoto_ticket',
-    description: 'Desain Sua Foto garis permen merah-putih dengan tiket emas, barcode dan stempel kenangan manis Suafoto.',
+    description: 'Desain Piku Foto garis permen merah-putih dengan tiket emas, barcode dan stempel kenangan manis.',
     slots: 4,
     aspect: 'Candy Pass',
     customFields: {
-      brand: "Sua Foto's",
-      ticketTitle: 'SUAFOTO GOLDEN TICKET',
-      city: 'MAKASSAR',
+      brand: "Piku Foto's",
+      ticketTitle: 'PIKUBOOTH GOLDEN TICKET',
+      city: 'SPECIAL',
       duration: 'SELAMANYA',
-      footer: 'Manis - Manis Suafoto'
+      footer: 'Manis - Manis Pikubooth'
     }
   },
 
   // ===================== 3. KOREAN STUDIO (6) =====================
   {
     id: 'haru_cloud',
-    name: 'Haru Film Pastel Sky',
+    name: 'Piku Cloud Pastel Sky',
     category: 'korean_booth',
     tag: 'Signature Korea',
     badge: 'Top Pick',
@@ -244,14 +244,14 @@ export const TEMPLATES_LIST = [
     cardBg: '#e0f2fe',
     textColor: '#0369a1',
     theme: 'haru_cloud',
-    description: 'Photobooth khas Haru Film Korea dengan awan putih lembut dan warna langit pastel.',
+    description: 'Photobooth khas Korea dengan awan putih lembut dan warna langit pastel.',
     slots: 4,
-    aspect: 'Haru 4-Cut',
+    aspect: 'Cloud 4-Cut',
     customFields: {
-      brand: 'haru film.',
+      brand: 'piku film.',
       cloudNote: 'pure soft moments',
-      date: '2026.10.12',
-      studio: 'seoul photostudio'
+      date: '2026.10.13',
+      studio: 'pikubooth studio'
     }
   },
   {
@@ -270,13 +270,13 @@ export const TEMPLATES_LIST = [
     customFields: {
       brand: '인생네컷 • LIFE 4 CUTS',
       sub: 'THE BEST MOMENT OF MY LIFE',
-      date: '2026.10.12',
-      studioCode: 'SEOUL NO. 04'
+      date: '2026.10.13',
+      studioCode: 'PIKU NO. 04'
     }
   },
   {
     id: 'photoism_mono',
-    name: 'Photoism Seoul Monochrome',
+    name: 'Piku Mono Seoul Studio',
     category: 'korean_booth',
     tag: 'Clean Minimal',
     badge: 'Popular',
@@ -284,11 +284,11 @@ export const TEMPLATES_LIST = [
     cardBg: '#18181b',
     textColor: '#f4f4f5',
     theme: 'photoism',
-    description: 'Studio self-photo ala Photoism Seoul dengan frame hitam minimalis dan tipografi elegan.',
+    description: 'Studio self-photo bergaya Seoul dengan frame hitam minimalis dan tipografi elegan.',
     slots: 4,
     aspect: 'Studio Strip',
     customFields: {
-      brand: 'photoism.',
+      brand: 'pikubooth.',
       tag: 'self photostudio project',
       date: 'OCTOBER 2026',
       city: 'SEOUL • TOKYO'
@@ -296,19 +296,19 @@ export const TEMPLATES_LIST = [
   },
   {
     id: 'photolookup_cream',
-    name: 'PhotoLookup 2026 Navy Stars',
+    name: 'PikuLookup 2026 Navy Stars',
     category: 'korean_booth',
-    tag: 'PhotoLookup',
+    tag: 'PikuLookup',
     badge: 'Pinterest Hit',
     defaultBg: '#1e293b',
     cardBg: '#f8fafc',
     textColor: '#0f172a',
     theme: 'photolookup_cream',
-    description: 'Photobooth krem-navy dengan cap tahun 2026, bintang bordir marun, dan stempel PHOTOLOOKUP autentik.',
+    description: 'Photobooth krem-navy dengan cap tahun 2026, bintang bordir marun, dan stempel PIKULOOKUP autentik.',
     slots: 4,
     aspect: 'Studio Strip',
     customFields: {
-      brand: 'PHOTOLOOKUP',
+      brand: 'PIKULOOKUP',
       year: '2026',
       tagline: 'SAVE THE BEST MOMENT'
     }
@@ -329,13 +329,13 @@ export const TEMPLATES_LIST = [
     customFields: {
       title: 'プリクラ ★ PURIKURA',
       sub: 'BESTIES FOREVER ♡',
-      date: '’26 10.12',
-      sparkleNote: 'キラキラ SUPER CUTE'
+      date: '’26 10.13',
+      sparkleNote: 'キラキラ PIKU CUTE'
     }
   },
   {
     id: 'selfit_minimal',
-    name: 'Selfit Studio Clean Porcelain',
+    name: 'Pikufit Studio Clean Porcelain',
     category: 'korean_booth',
     tag: 'Porcelain Korea',
     badge: 'Clean',
@@ -347,7 +347,7 @@ export const TEMPLATES_LIST = [
     slots: 4,
     aspect: 'Clean 4-Cut',
     customFields: {
-      brand: 'selfit photostudio.',
+      brand: 'pikubooth studio.',
       subtitle: 'simple quiet moments',
       date: 'OCT 2026'
     }
@@ -374,12 +374,12 @@ export const TEMPLATES_LIST = [
       flight2: 'IDN ➔ SGP',
       gate2: '07',
       seat2: '11B',
-      airline: "LION'S AIR"
+      airline: 'PIKU AIRWAYS'
     }
   },
   {
     id: 'theater',
-    name: 'Theather Show Ticket',
+    name: 'Theater Show Ticket',
     category: 'ticket_travel',
     tag: 'Classic Cinema',
     badge: 'Trending',
@@ -391,18 +391,18 @@ export const TEMPLATES_LIST = [
     slots: 4,
     aspect: 'Strip Vertikal',
     customFields: {
-      title: 'Theather Show',
+      title: 'Theater Show',
       row: 'B2',
       show: '02',
       date: 'Sunday, 29 March',
       time: '20.00',
-      ribbon: 'SAVE THE BEST MOMENT ★ SAVE THE BEST MOMENT',
-      studioName: 'kafastudio.'
+      ribbon: '★ SAVE THE BEST MOMENT ★',
+      studioName: 'pikubooth.'
     }
   },
   {
     id: 'boarding_detik',
-    name: 'Detik Air Boarding Pass',
+    name: 'Piku Air Boarding Pass',
     category: 'ticket_travel',
     tag: 'Flight Pass',
     badge: 'Popular',
@@ -414,7 +414,7 @@ export const TEMPLATES_LIST = [
     slots: 4,
     aspect: '2x2 Grid Pass',
     customFields: {
-      airline: 'DETIK AIR',
+      airline: 'PIKU AIR',
       origin: 'USA',
       destination: 'CN',
       flight: 'GF 6815',
@@ -606,7 +606,7 @@ export const TEMPLATES_LIST = [
   // ===================== 6. POSTAL & POLAROID (6) =====================
   {
     id: 'airmail_meenie',
-    name: 'Air Mail Postcard Meenie Box',
+    name: 'Air Mail Postcard Piku Box',
     category: 'postal_scrapbook',
     tag: 'Air Mail Postcard',
     badge: 'Featured',
@@ -619,7 +619,7 @@ export const TEMPLATES_LIST = [
     aspect: 'Kartu Pos',
     customFields: {
       recipient: 'My Beloved One',
-      brand: 'MEENIE BOX!',
+      brand: 'PIKU BOX!',
       stampText: 'APPROVED',
       postmark: 'AIRMAIL POSTAGE PAID'
     }
