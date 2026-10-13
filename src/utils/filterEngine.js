@@ -183,19 +183,42 @@ export const DEFAULT_FILTER_SETTINGS = {
   aiStudioLight: true
 };
 
-// Real-time Intelligent Camera Scene Analyzer (Bi-Directional Auto-Exposure: Dark Boost + Bright/Backlight Anti-Glare)
+// Helper: Build a 17-point normalized lookup table string for SVG <feComponentTransfer type="table">
+function buildSvgTableString(blackCut, whitePoint, gamma, sCurveStrength, channelGain = 1.0) {
+  const denom = Math.max(20, whitePoint - blackCut);
+  const pts = [];
+  for (let i = 0; i <= 16; i++) {
+    const v = (i / 16) * 255;
+    let t = Math.min(1, Math.max(0, (v - blackCut) / denom));
+    let g = Math.pow(t, gamma);
+    const s = g * g * (3 - 2 * g);
+    let out = s * sCurveStrength + g * (1 - sCurveStrength);
+    out = Math.min(1, Math.max(0, out * channelGain));
+    pts.push(out.toFixed(3));
+  }
+  return pts.join(' ');
+}
+
+const DEFAULT_TABLE = '0 0.063 0.125 0.188 0.25 0.313 0.375 0.438 0.5 0.563 0.625 0.688 0.75 0.813 0.875 0.938 1';
+
+// Real-time Intelligent Camera Scene Analyzer + 17-Point Auto-Dehaze & S-Curve LUT Generator
 let analyzerCanvas = null;
-export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }) {
+let smoothedState = null;
+
+export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }, manualAdjust = { exposure: 0, dehaze: 0 }) {
   if (!videoEl || !videoEl.videoWidth || !videoEl.videoHeight) {
     return {
       luminance: 55,
       status: 'OPTIMAL',
-      label: 'AF • Auto-Cahaya Terkunci',
+      label: 'AF • Auto-Cahaya Aktif',
       boostNeeded: 0,
-      contrastBoost: 6,
-      saturationBoost: 4,
+      contrastBoost: 8,
+      saturationBoost: 10,
       gamma: 1.0,
-      dehazeFloor: 0
+      dehazeFloor: 0,
+      tableR: DEFAULT_TABLE,
+      tableG: DEFAULT_TABLE,
+      tableB: DEFAULT_TABLE
     };
   }
 
@@ -214,15 +237,18 @@ export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }) {
     let totalLum = 0;
     let focusLum = 0;
     let focusCount = 0;
-    let overexposedPixels = 0;
+    let sumR = 0;
+    let sumG = 0;
+    let sumB = 0;
+    let colorSamples = 0;
     const hist = new Uint16Array(256);
     const pixelCount = data.length / 4;
 
     // Focus region around user's tap point or center face area
     const fx = Math.round((focusPoint?.x ?? 0.5) * sw);
-    const fy = Math.round((focusPoint?.y ?? 0.5) * sh);
+    const fy = Math.round((focusPoint?.y ?? 0.48) * sh);
     const boxRx = 14;
-    const boxRy = 12;
+    const boxRy = 13;
 
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
@@ -232,7 +258,12 @@ export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }) {
       hist[lum]++;
       totalLum += lum;
 
-      if (lum > 215) overexposedPixels++;
+      if (lum > 30 && lum < 230) {
+        sumR += r;
+        sumG += g;
+        sumB += b;
+        colorSamples++;
+      }
 
       const pxIndex = i / 4;
       const x = pxIndex % sw;
@@ -243,102 +274,135 @@ export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }) {
       }
     }
 
-    // Find 8th-percentile luminance (black floor) to detect milky backlight haze
+    // Find 4th-percentile (black floor), 12th-percentile, and 98th-percentile (white ceiling)
     let acc = 0;
-    let p08 = 0;
-    const targetP08 = pixelCount * 0.08;
+    let p04 = 0;
+    let p12 = 0;
+    let p98 = 250;
+    let found04 = false;
+    let found12 = false;
+    const t04 = pixelCount * 0.04;
+    const t12 = pixelCount * 0.12;
+    const t98 = pixelCount * 0.98;
+
     for (let v = 0; v < 256; v++) {
       acc += hist[v];
-      if (acc >= targetP08) {
-        p08 = v;
+      if (!found04 && acc >= t04) {
+        p04 = v;
+        found04 = true;
+      }
+      if (!found12 && acc >= t12) {
+        p12 = v;
+        found12 = true;
+      }
+      if (acc >= t98) {
+        p98 = v;
         break;
       }
     }
 
     const avgLum = totalLum / pixelCount;
     const rawFocusLum = focusCount > 0 ? focusLum / focusCount : avgLum;
-    // Blend 65% focus box + 35% global so tapping a bright wall doesn't crush the whole image
-    const avgFocusLum = rawFocusLum * 0.65 + avgLum * 0.35;
-    const lumPct = Math.round((avgFocusLum / 255) * 100);
-    const globalLumPct = Math.round((avgLum / 255) * 100);
-    const overexposedPct = Math.round((overexposedPixels / pixelCount) * 100);
-    const dehazeFloor = Math.min(0.22, Math.max(0, ((p08 - 16) / 255) * 0.78));
+    // Blend 60% focus region + 40% global scene so clicking a bright background wall never ruins face metering
+    const subjectLum = rawFocusLum * 0.6 + avgLum * 0.4;
 
-    // CASE 1: TOO BRIGHT / OVEREXPOSED / STRONG BACKLIGHT GLARE
-    // Use non-linear gamma (1.16..1.38) + black-floor dehaze so midtone glare is toned down while whites stay clean white (NEVER grey!)
-    if (lumPct > 62 || globalLumPct > 66 || overexposedPct > 24) {
-      const excess = Math.max(lumPct - 54, globalLumPct - 56, overexposedPct - 10);
-      const gammaVal = Math.min(1.38, 1.14 + (excess / 45) * 0.24);
-      const contrastUp = Math.min(24, Math.max(12, Math.round(excess * 0.55)));
-      return {
-        luminance: lumPct,
-        status: 'BRIGHT',
-        label: 'AF • Anti-Silau & Dehaze',
-        boostNeeded: -4,
-        contrastBoost: contrastUp,
-        saturationBoost: 12,
-        gamma: Number(gammaVal.toFixed(2)),
-        dehazeFloor: Number(dehazeFloor.toFixed(3))
-      };
+    // Temporal smoothing (EMA) so live camera preview transitions smoothly without flickering
+    if (!smoothedState) {
+      smoothedState = { p04, p12, p98, subjectLum, avgLum };
+    } else {
+      smoothedState.p04 = smoothedState.p04 * 0.65 + p04 * 0.35;
+      smoothedState.p12 = smoothedState.p12 * 0.65 + p12 * 0.35;
+      smoothedState.p98 = smoothedState.p98 * 0.65 + p98 * 0.35;
+      smoothedState.subjectLum = smoothedState.subjectLum * 0.65 + subjectLum * 0.35;
+      smoothedState.avgLum = smoothedState.avgLum * 0.65 + avgLum * 0.35;
     }
 
-    // CASE 2: BACKLIT SILHOUETTE (Background is bright, but face in focus box is genuinely dark < 45%)
-    if (globalLumPct - lumPct > 16 && lumPct < 45) {
-      const lift = Math.min(14, Math.max(6, Math.round((50 - lumPct) * 0.6)));
-      return {
-        luminance: lumPct,
-        status: 'BACKLIT',
-        label: `AF • HDR Backlight (+${lift}%)`,
-        boostNeeded: lift,
-        contrastBoost: 14,
-        saturationBoost: 10,
-        gamma: 0.88,
-        dehazeFloor: Number((dehazeFloor * 0.6).toFixed(3))
-      };
+    const sp04 = smoothedState.p04;
+    const sp12 = smoothedState.p12;
+    const sp98 = smoothedState.p98;
+    const sSubLum = smoothedState.subjectLum;
+
+    // 1. True Black-Floor Dehaze: strips away milky webcam lens fog (even when darkest pixel is 110/255!)
+    const userDehazeOffset = (manualAdjust?.dehaze || 0) * 0.9;
+    const rawBlackCut = sp04 * 0.82 + Math.max(0, sp12 - 22) * 0.18 - 5 + userDehazeOffset;
+    const blackCut = Math.min(130, Math.max(0, rawBlackCut));
+
+    // 2. Clean White-Point Ceiling: guarantees whites stay crisp 255 (NEVER murky grey!)
+    const whitePoint = Math.max(blackCut + 75, Math.min(253, sp98 * 0.97));
+
+    // 3. Closed-Form Target Face Gamma: places the subject face at ideal studio luminance (0.57)
+    const userExpOffset = (manualAdjust?.exposure || 0) / 160; // -0.25 .. +0.25
+    const targetMid = Math.min(0.76, Math.max(0.38, 0.57 + userExpOffset));
+    const midNorm = Math.min(0.86, Math.max(0.14, (sSubLum - blackCut) / Math.max(30, whitePoint - blackCut)));
+    const gamma = Math.min(1.58, Math.max(0.62, Math.log(targetMid) / Math.log(midNorm)));
+
+    // 4. Filmic S-Curve & Auto White Balance (neutralizes cold green/blue office lights & warms skin)
+    const isHazyOrBright = sp04 > 34 || sSubLum > 152;
+    const sCurveStrength = isHazyOrBright ? 0.34 : 0.22;
+
+    let gainR = 1.03;
+    let gainG = 1.0;
+    let gainB = 0.98;
+    if (colorSamples > 40) {
+      const avgR = sumR / colorSamples;
+      const avgG = sumG / colorSamples;
+      const avgB = sumB / colorSamples;
+      const gray = (avgR + avgG + avgB) / 3;
+      gainR = Math.min(1.09, Math.max(0.95, (gray / Math.max(1, avgR)) * 1.03));
+      gainG = Math.min(1.04, Math.max(0.95, gray / Math.max(1, avgG)));
+      gainB = Math.min(1.06, Math.max(0.92, (gray / Math.max(1, avgB)) * 0.98));
     }
 
-    // CASE 3: DARK / LOW-LIGHT ROOM (Face is genuinely dark < 42%)
-    if (lumPct < 42) {
-      const boost = Math.min(20, Math.max(6, Math.round((48 - lumPct) * 0.7)));
-      return {
-        luminance: lumPct,
-        status: 'LOW_LIGHT',
-        label: `AF • Night Low-Light (+${boost}%)`,
-        boostNeeded: boost,
-        contrastBoost: 10,
-        saturationBoost: 10,
-        gamma: 0.82,
-        dehazeFloor: 0
-      };
+    const tableR = buildSvgTableString(blackCut, whitePoint, gamma, sCurveStrength, gainR);
+    const tableG = buildSvgTableString(blackCut, whitePoint, gamma, sCurveStrength, gainG);
+    const tableB = buildSvgTableString(blackCut, whitePoint, gamma, sCurveStrength, gainB);
+
+    // 5. Adaptive Saturation Recovery: optical fog dilutes colors, so restore vibrant saturation proportionally
+    const fogAmountPct = Math.round((blackCut / 255) * 100);
+    const saturationBoost = Math.min(44, Math.max(10, 10 + Math.round(fogAmountPct * 0.95)));
+    const lumPct = Math.round((sSubLum / 255) * 100);
+
+    let status = 'OPTIMAL';
+    let label = 'AF • Studio Auto-Jernih';
+    if (sp04 > 38 || lumPct > 62) {
+      status = 'BRIGHT';
+      label = 'AF • Anti-Kabut & Anti-Silau Aktif';
+    } else if (lumPct < 42) {
+      status = 'LOW_LIGHT';
+      label = 'AF • Night Low-Light Boost Aktif';
     }
 
-    // CASE 4: BALANCED / NORMAL LIGHTING (42% - 62%)
     return {
       luminance: lumPct,
-      status: 'OPTIMAL',
-      label: 'AF • Cahaya Seimbang',
+      status,
+      label,
       boostNeeded: 0,
       contrastBoost: 8,
-      saturationBoost: 6,
-      gamma: 1.04,
-      dehazeFloor: Number((dehazeFloor * 0.5).toFixed(3))
+      saturationBoost,
+      gamma: Number(gamma.toFixed(2)),
+      dehazeFloor: Number((blackCut / 255).toFixed(3)),
+      tableR,
+      tableG,
+      tableB
     };
   } catch (e) {
     return {
       luminance: 55,
       status: 'OPTIMAL',
-      label: 'AF • Cahaya Seimbang',
+      label: 'AF • Studio Auto-Jernih',
       boostNeeded: 0,
-      contrastBoost: 6,
-      saturationBoost: 4,
+      contrastBoost: 8,
+      saturationBoost: 10,
       gamma: 1.0,
-      dehazeFloor: 0
+      dehazeFloor: 0,
+      tableR: DEFAULT_TABLE,
+      tableG: DEFAULT_TABLE,
+      tableB: DEFAULT_TABLE
     };
   }
 }
 
-// Adaptive Computational Photography ISP
-// Automatically darkens/dehazes washed-out/backlit webcams AND brightens dark low-light cameras
+// Adaptive Computational Photography ISP (Matches Live 17-Point Auto-Dehaze & S-Curve + Saturation Recovery)
 export function processIntelligentCapture(ctx, width, height, options = {}) {
   if (!ctx || !width || !height) return;
   const {
@@ -346,13 +410,13 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
     skinSmooth = true,
     studioLight = true,
     autoFocusSharpen = true,
-    focusPoint = { x: 0.5, y: 0.45 }
+    focusPoint = { x: 0.5, y: 0.45 },
+    manualAdjust = { exposure: 0, dehaze: 0 }
   } = options;
 
   let isOverexposedScene = false;
   let isDarkScene = false;
 
-  // STAGE 1 & 2: Bi-Directional Auto-Exposure (Anti-Glare Highlight Recovery OR Low-Light Shadow Lift) + Dehaze
   if (autoTone) {
     try {
       const imgData = ctx.getImageData(0, 0, width, height);
@@ -365,17 +429,14 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
       let focusLum = 0;
       let focusCount = 0;
       let sampleCount = 0;
-      let brightCount = 0;
 
-      // Histogram bins (0..255) to find true black floor (10th percentile) for dehazing milky webcams
       const hist = new Uint32Array(256);
-
       const fx = Math.round((focusPoint?.x ?? 0.5) * width);
       const fy = Math.round((focusPoint?.y ?? 0.45) * height);
       const rx = Math.round(width * 0.25);
       const ry = Math.round(height * 0.25);
 
-      const step = 4 * 12;
+      const step = 4 * 10;
       for (let i = 0; i < data.length; i += step) {
         const r = data[i];
         const g = data[i + 1];
@@ -383,13 +444,12 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
         const lum = Math.min(255, Math.max(0, Math.round(0.299 * r + 0.587 * g + 0.114 * b)));
         hist[lum]++;
 
-        if (lum > 20 && lum < 235) {
+        if (lum > 25 && lum < 232) {
           sumR += r;
           sumG += g;
           sumB += b;
           sampleCount++;
         }
-        if (lum > 210) brightCount++;
         sumLum += lum;
 
         const pxIdx = i / 4;
@@ -403,99 +463,97 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
 
       const totalSamples = Math.max(1, Math.floor(data.length / step));
       const avgLum = sumLum / totalSamples;
-      const subjectLum = focusCount > 0 ? focusLum / focusCount : avgLum;
-      const overexposedRatio = brightCount / totalSamples;
+      const rawFocusLum = focusCount > 0 ? focusLum / focusCount : avgLum;
+      const subjectLum = rawFocusLum * 0.6 + avgLum * 0.4;
 
-      // Find 8th percentile luminance (black point floor) to remove milky webcam haze
       let acc = 0;
-      let p08 = 0;
-      const targetP08 = totalSamples * 0.08;
+      let p04 = 0;
+      let p12 = 0;
+      let p98 = 250;
+      let found04 = false;
+      let found12 = false;
+      const t04 = totalSamples * 0.04;
+      const t12 = totalSamples * 0.12;
+      const t98 = totalSamples * 0.98;
+
       for (let v = 0; v < 256; v++) {
         acc += hist[v];
-        if (acc >= targetP08) {
-          p08 = v;
+        if (!found04 && acc >= t04) {
+          p04 = v;
+          found04 = true;
+        }
+        if (!found12 && acc >= t12) {
+          p12 = v;
+          found12 = true;
+        }
+        if (acc >= t98) {
+          p98 = v;
           break;
         }
       }
 
-      isOverexposedScene = subjectLum > 152 || avgLum > 160 || overexposedRatio > 0.22;
-      isDarkScene = subjectLum < 108 && overexposedRatio < 0.15;
+      const userDehazeOffset = (manualAdjust?.dehaze || 0) * 0.9;
+      const blackCut = Math.min(130, Math.max(0, p04 * 0.82 + Math.max(0, p12 - 22) * 0.18 - 5 + userDehazeOffset));
+      const whitePoint = Math.max(blackCut + 75, Math.min(253, p98 * 0.97));
 
-      // Gentle Auto White Balance
-      let gainR = 1.01;
+      const userExpOffset = (manualAdjust?.exposure || 0) / 160;
+      const targetMid = Math.min(0.76, Math.max(0.38, 0.57 + userExpOffset));
+      const midNorm = Math.min(0.86, Math.max(0.14, (subjectLum - blackCut) / Math.max(30, whitePoint - blackCut)));
+      const gamma = Math.min(1.58, Math.max(0.62, Math.log(targetMid) / Math.log(midNorm)));
+
+      isOverexposedScene = p04 > 34 || subjectLum > 152;
+      isDarkScene = subjectLum < 105 && p04 < 25;
+      const sCurveStrength = isOverexposedScene ? 0.34 : 0.22;
+
+      let gainR = 1.03;
       let gainG = 1.0;
-      let gainB = 1.0;
+      let gainB = 0.98;
       if (sampleCount > 50) {
         const avgR = sumR / sampleCount;
         const avgG = sumG / sampleCount;
         const avgB = sumB / sampleCount;
         const gray = (avgR + avgG + avgB) / 3;
-        gainR = Math.min(1.10, Math.max(0.92, (gray / Math.max(1, avgR)) * 1.02));
-        gainG = Math.min(1.06, Math.max(0.94, (gray / Math.max(1, avgG))));
-        gainB = Math.min(1.10, Math.max(0.92, (gray / Math.max(1, avgB))));
-      }
-
-      // Compute Bi-Directional Gamma & Black Floor Dehaze:
-      // - If TOO BRIGHT / BACKLIT: gamma > 1.0 (1.18..1.52) pulls down glare + black-point dehaze restores contrast!
-      // - If DARK: gamma < 1.0 (0.72..0.92) lifts dark shadows cleanly!
-      // - If NORMAL: gamma ~ 1.0
-      let gamma = 1.0;
-      let blackFloor = 0;
-      let sCurveStrength = 0.22;
-
-      if (isOverexposedScene) {
-        const excess = Math.max(0, subjectLum - 135, avgLum - 140, overexposedRatio * 180);
-        gamma = Math.min(1.52, 1.15 + (excess / 120) * 0.37);
-        blackFloor = Math.min(48, Math.max(10, Math.round(p08 * 0.65)));
-        sCurveStrength = 0.38;
-      } else if (isDarkScene) {
-        gamma = Math.max(0.72, 0.94 - ((110 - subjectLum) / 110) * 0.24);
-        blackFloor = Math.min(12, Math.round(p08 * 0.3));
-        sCurveStrength = 0.22;
-      } else {
-        gamma = 1.02;
-        blackFloor = Math.min(18, Math.round(p08 * 0.4));
-        sCurveStrength = 0.20;
+        gainR = Math.min(1.09, Math.max(0.95, (gray / Math.max(1, avgR)) * 1.03));
+        gainG = Math.min(1.04, Math.max(0.95, gray / Math.max(1, avgG)));
+        gainB = Math.min(1.06, Math.max(0.92, (gray / Math.max(1, avgB)) * 0.98));
       }
 
       const lutR = new Uint8ClampedArray(256);
       const lutG = new Uint8ClampedArray(256);
       const lutB = new Uint8ClampedArray(256);
-      const denom = Math.max(1, 255 - blackFloor);
+      const denom = Math.max(20, whitePoint - blackCut);
 
       for (let v = 0; v < 256; v++) {
-        // Subtract milky haze floor
-        const dehazed = Math.max(0, (v - blackFloor) / denom);
-        let norm = Math.pow(dehazed, gamma);
-
-        // Compress blown highlights softly when scene is overexposed
-        if (isOverexposedScene && norm > 0.75) {
-          norm = 0.75 + (norm - 0.75) * 0.72;
-        }
-
-        // Filmic contrast S-curve
-        const sCurve = norm * norm * (3 - 2 * norm);
-        norm = sCurve * sCurveStrength + norm * (1 - sCurveStrength);
-        const base = Math.min(255, Math.max(0, norm * 255));
+        const t = Math.min(1, Math.max(0, (v - blackCut) / denom));
+        const g = Math.pow(t, gamma);
+        const sCurve = g * g * (3 - 2 * g);
+        const norm = sCurve * sCurveStrength + g * (1 - sCurveStrength);
+        const base = norm * 255;
 
         lutR[v] = Math.min(255, Math.max(0, Math.round(base * gainR)));
         lutG[v] = Math.min(255, Math.max(0, Math.round(base * gainG)));
         lutB[v] = Math.min(255, Math.max(0, Math.round(base * gainB)));
       }
 
+      // Color saturation recovery factor to counter webcam fog desaturation
+      const satFactor = 1 + Math.min(0.42, Math.max(0.08, (blackCut / 255) * 0.95));
+
       for (let i = 0; i < data.length; i += 4) {
-        data[i] = lutR[data[i]];
-        data[i + 1] = lutG[data[i + 1]];
-        data[i + 2] = lutB[data[i + 2]];
+        const nr = lutR[data[i]];
+        const ng = lutG[data[i + 1]];
+        const nb = lutB[data[i + 2]];
+        const luma = 0.299 * nr + 0.587 * ng + 0.114 * nb;
+
+        data[i] = Math.min(255, Math.max(0, Math.round(luma + (nr - luma) * satFactor)));
+        data[i + 1] = Math.min(255, Math.max(0, Math.round(luma + (ng - luma) * satFactor)));
+        data[i + 2] = Math.min(255, Math.max(0, Math.round(luma + (nb - luma) * satFactor)));
       }
 
       ctx.putImageData(imgData, 0, 0);
-    } catch (e) {
-      // Fallback if pixel read fails
-    }
+    } catch (e) {}
   }
 
-  // STAGE 3: Sensor Chroma Noise Reduction & Skin Smoothing (Never uses 'screen' on bright images!)
+  // STAGE 3: Sensor Chroma Noise Reduction & Skin Smoothing
   if (skinSmooth) {
     try {
       const offCanvas = document.createElement('canvas');
@@ -506,19 +564,11 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
 
       ctx.save();
       try {
-        ctx.filter = `blur(${Math.max(2, Math.round(width * 0.006))}px)`;
+        ctx.filter = `blur(${Math.max(2, Math.round(width * 0.005))}px)`;
       } catch (e) {}
-
-      if (isOverexposedScene) {
-        // In bright/overexposed scenes, use multiply + soft-light to recover rich skin tone & reduce glare
-        ctx.globalCompositeOperation = 'multiply';
-        ctx.globalAlpha = 0.14;
-        ctx.drawImage(offCanvas, 0, 0, width, height);
-      } else {
-        ctx.globalCompositeOperation = 'soft-light';
-        ctx.globalAlpha = 0.18;
-        ctx.drawImage(offCanvas, 0, 0, width, height);
-      }
+      ctx.globalCompositeOperation = 'soft-light';
+      ctx.globalAlpha = 0.14;
+      ctx.drawImage(offCanvas, 0, 0, width, height);
       ctx.restore();
     } catch (e) {}
   }

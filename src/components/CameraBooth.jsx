@@ -39,15 +39,22 @@ export default function CameraBooth({
   const [ringLightOn, setRingLightOn] = useState(false);
   const [cameraError, setCameraError] = useState(null);
 
-  // Bi-Directional Auto-Focus & Auto-Lighting Telemetry (Dark Boost + Bright/Backlight Anti-Glare)
+  // Bi-Directional Auto-Focus & Auto-Lighting Telemetry (17-Point GPU LUT Dehaze + Closed-Form Face Exposure)
   const [sceneInfo, setSceneInfo] = useState({
     luminance: 55,
     status: 'OPTIMAL',
-    label: 'AF • Cahaya Seimbang',
+    label: 'AF • Studio Auto-Jernih',
     boostNeeded: 0,
-    contrastBoost: 6,
-    saturationBoost: 4
+    contrastBoost: 8,
+    saturationBoost: 12,
+    gamma: 1.0,
+    dehazeFloor: 0,
+    tableR: '0 0.063 0.125 0.188 0.25 0.313 0.375 0.438 0.5 0.563 0.625 0.688 0.75 0.813 0.875 0.938 1',
+    tableG: '0 0.063 0.125 0.188 0.25 0.313 0.375 0.438 0.5 0.563 0.625 0.688 0.75 0.813 0.875 0.938 1',
+    tableB: '0 0.063 0.125 0.188 0.25 0.313 0.375 0.438 0.5 0.563 0.625 0.688 0.75 0.813 0.875 0.938 1'
   });
+  const [manualExposure, setManualExposure] = useState(0); // -30 .. +30
+  const [manualDehaze, setManualDehaze] = useState(12); // Default +12 extra dehaze for crisp blacks on hazy webcams
   const [focusPoint, setFocusPoint] = useState({ x: 0.5, y: 0.45 });
   const [focusState, setFocusState] = useState('locked'); // 'locking' | 'locked'
   const [showFocusBox, setShowFocusBox] = useState(true);
@@ -62,7 +69,7 @@ export default function CameraBooth({
     }
   }, [targetSlot]);
 
-  // Apply hardware-level Continuous Auto-Focus, Auto-Exposure & Auto-White-Balance without forcing positive overexposure
+  // Apply hardware-level Continuous Auto-Focus, Auto-Exposure & Auto-White-Balance
   const applyHardwareCameraEnhancements = async (mediaStream, point = { x: 0.5, y: 0.45 }) => {
     try {
       const track = mediaStream?.getVideoTracks?.()[0];
@@ -107,7 +114,10 @@ export default function CameraBooth({
     if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
 
     if (videoRef.current && videoRef.current.readyState >= 2) {
-      const info = analyzeVideoScene(videoRef.current, newPoint);
+      const info = analyzeVideoScene(videoRef.current, newPoint, {
+        exposure: manualExposure,
+        dehaze: manualDehaze
+      });
       setSceneInfo(info);
       if (stream) {
         applyHardwareCameraEnhancements(stream, newPoint);
@@ -166,17 +176,28 @@ export default function CameraBooth({
     };
   }, [isOpen, facingMode]);
 
-  // Continuous Real-Time Auto-Exposure & Anti-Backlight Analyzer (every 400ms)
+  // Continuous Real-Time Auto-Levels Dehaze & Face Exposure Analyzer (every 280ms)
   useEffect(() => {
     if (!isOpen || cameraError) return;
+    if (videoRef.current && videoRef.current.readyState >= 2) {
+      setSceneInfo(
+        analyzeVideoScene(videoRef.current, focusPoint, {
+          exposure: manualExposure,
+          dehaze: manualDehaze
+        })
+      );
+    }
     const interval = setInterval(() => {
       if (videoRef.current && videoRef.current.readyState >= 2) {
-        const res = analyzeVideoScene(videoRef.current, focusPoint);
+        const res = analyzeVideoScene(videoRef.current, focusPoint, {
+          exposure: manualExposure,
+          dehaze: manualDehaze
+        });
         setSceneInfo(res);
       }
-    }, 400);
+    }, 280);
     return () => clearInterval(interval);
-  }, [isOpen, cameraError, focusPoint]);
+  }, [isOpen, cameraError, focusPoint, manualExposure, manualDehaze]);
 
   const handleToggleFacing = () => {
     const nextMode = facingMode === 'user' ? 'environment' : 'user';
@@ -194,7 +215,7 @@ export default function CameraBooth({
     triggerAutoFocusLock({ x: clickX, y: clickY });
   };
 
-  // Capture frame with Bi-Directional ISP (Dark Boost OR Bright/Backlight Dehaze + Auto-Focus Sharpen)
+  // Capture frame with Full 17-Point Auto-Dehaze & S-Curve + Auto-Focus Sharpen
   const captureFrame = (slotToFill) => {
     if (!videoRef.current) return null;
     const video = videoRef.current;
@@ -220,7 +241,11 @@ export default function CameraBooth({
       skinSmooth: true,
       studioLight: true,
       autoFocusSharpen: true,
-      focusPoint: effectiveFocusPoint
+      focusPoint: effectiveFocusPoint,
+      manualAdjust: {
+        exposure: manualExposure,
+        dehaze: manualDehaze
+      }
     });
 
     setFlash(true);
@@ -325,22 +350,12 @@ export default function CameraBooth({
 
   if (!isOpen) return null;
 
-  // Bi-directional live auto-exposure compensation with Non-Linear Gamma & Black-Floor Dehaze:
-  // Keeps whites clean (255) and blacks deep (0) instead of turning bright scenes into flat grey!
-  const userBrightness = sceneInfo.status === 'BRIGHT' ? Math.min(0, filterSettings?.brightness || 0) : (filterSettings?.brightness || 0);
   const userContrast = filterSettings?.contrast || 0;
   const userSaturation = filterSettings?.saturation || 0;
-
-  const totalBrightness = 1 + (userBrightness + (sceneInfo.boostNeeded ?? 0)) / 100;
   const totalContrast = 1 + (userContrast + (sceneInfo.contrastBoost ?? 8)) / 100;
-  const totalSaturation = 1 + (userSaturation + (sceneInfo.saturationBoost ?? 6)) / 100;
+  const totalSaturation = 1 + (userSaturation + (sceneInfo.saturationBoost ?? 14)) / 100;
 
-  const dehazeFloor = sceneInfo.dehazeFloor ?? 0;
-  const dehazeSlope = Number((1 / Math.max(0.5, 1 - dehazeFloor)).toFixed(3));
-  const dehazeIntercept = Number((-dehazeFloor * dehazeSlope).toFixed(3));
-  const liveGamma = sceneInfo.gamma ?? 1.04;
-
-  const liveVideoFilter = `url(#pikubooth-live-isp) brightness(${Math.max(0.92, Math.min(1.25, totalBrightness)).toFixed(2)}) contrast(${Math.max(0.95, Math.min(1.38, totalContrast)).toFixed(2)}) saturate(${Math.max(0, Math.min(1.45, totalSaturation)).toFixed(2)})`;
+  const liveVideoFilter = `url(#pikubooth-live-isp) contrast(${Math.max(1.0, Math.min(1.35, totalContrast)).toFixed(2)}) saturate(${Math.max(0, Math.min(1.55, totalSaturation)).toFixed(2)})`;
 
   return (
     <div
@@ -348,19 +363,20 @@ export default function CameraBooth({
         ringLightOn ? 'bg-amber-50/90' : 'bg-stone-950/80'
       }`}
     >
-      {/* Hardware-accelerated SVG ISP Filter: Subtracts milky webcam glare floor & applies smooth Gamma curve without greying out whites */}
+      {/* Hardware-Accelerated 60fps GPU ISP: 17-Point Auto-Levels Dehaze & S-Curve LUT + Real-Time Optical Unsharp Mask */}
       <svg width="0" height="0" className="absolute pointer-events-none" aria-hidden="true">
         <filter id="pikubooth-live-isp" colorInterpolationFilters="sRGB">
-          <feComponentTransfer>
-            <feFuncR type="linear" slope={dehazeSlope} intercept={dehazeIntercept} />
-            <feFuncG type="linear" slope={dehazeSlope} intercept={dehazeIntercept} />
-            <feFuncB type="linear" slope={dehazeSlope} intercept={dehazeIntercept} />
+          <feComponentTransfer result="toned">
+            <feFuncR type="table" tableValues={sceneInfo.tableR} />
+            <feFuncG type="table" tableValues={sceneInfo.tableG} />
+            <feFuncB type="table" tableValues={sceneInfo.tableB} />
           </feComponentTransfer>
-          <feComponentTransfer>
-            <feFuncR type="gamma" amplitude="1" exponent={liveGamma} offset="0" />
-            <feFuncG type="gamma" amplitude="1" exponent={liveGamma} offset="0" />
-            <feFuncB type="gamma" amplitude="1" exponent={liveGamma} offset="0" />
-          </feComponentTransfer>
+          <feConvolveMatrix
+            in="toned"
+            order="3 3"
+            kernelMatrix="0 -0.22 0 -0.22 1.88 -0.22 0 -0.22 0"
+            preserveAlpha="true"
+          />
         </filter>
       </svg>
 
@@ -561,6 +577,41 @@ export default function CameraBooth({
               ))}
             </div>
           </div>
+
+          {/* Quick Live Exposure & Anti-Fog Sliders for Any Room Lighting */}
+          {!cameraError && (
+            <div className="mt-2.5 px-2 py-2 bg-white rounded-xl border border-stone-200/80 grid grid-cols-2 gap-3 text-[11px]">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-stone-600 shrink-0">Cahaya</span>
+                <input
+                  type="range"
+                  min="-25"
+                  max="25"
+                  value={manualExposure}
+                  onChange={(e) => setManualExposure(Number(e.target.value))}
+                  className="w-full h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                />
+                <span className="font-mono text-[10px] text-stone-500 w-7 text-right">
+                  {manualExposure > 0 ? `+${manualExposure}` : manualExposure}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-stone-600 shrink-0">Anti-Kabut</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="35"
+                  value={manualDehaze}
+                  onChange={(e) => setManualDehaze(Number(e.target.value))}
+                  className="w-full h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-stone-800"
+                />
+                <span className="font-mono text-[10px] text-stone-500 w-7 text-right">
+                  +{manualDehaze}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Clean Action Bar */}
