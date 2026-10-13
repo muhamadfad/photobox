@@ -49,6 +49,7 @@ export default function CameraBooth({
     saturationBoost: 0,
     gamma: 1.0,
     dehazeFloor: 0,
+    colorMatrix: '1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0',
     tableR: '0 0.063 0.125 0.188 0.25 0.313 0.375 0.438 0.5 0.563 0.625 0.688 0.75 0.813 0.875 0.938 1',
     tableG: '0 0.063 0.125 0.188 0.25 0.313 0.375 0.438 0.5 0.563 0.625 0.688 0.75 0.813 0.875 0.938 1',
     tableB: '0 0.063 0.125 0.188 0.25 0.313 0.375 0.438 0.5 0.563 0.625 0.688 0.75 0.813 0.875 0.938 1'
@@ -402,7 +403,7 @@ export default function CameraBooth({
         ringLightOn ? 'bg-amber-50/90' : 'bg-stone-950/80'
       }`}
     >
-      {/* Pure Color-Neutral Gentle Exposure LUT (Zero gritty convolution sharpening) */}
+      {/* Pure Color-Neutral Exposure LUT + Row-Sum-1 Anti-Yellow Matrix */}
       <svg width="0" height="0" className="absolute pointer-events-none" aria-hidden="true">
         <filter id="pikubooth-live-isp" colorInterpolationFilters="sRGB">
           <feComponentTransfer>
@@ -410,6 +411,10 @@ export default function CameraBooth({
             <feFuncG type="table" tableValues={sceneInfo.tableG} />
             <feFuncB type="table" tableValues={sceneInfo.tableB} />
           </feComponentTransfer>
+          <feColorMatrix
+            type="matrix"
+            values={sceneInfo.colorMatrix || '1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0'}
+          />
         </filter>
       </svg>
 

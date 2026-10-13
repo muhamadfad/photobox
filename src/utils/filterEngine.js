@@ -184,34 +184,104 @@ export const DEFAULT_FILTER_SETTINGS = {
 };
 
 const DEFAULT_TABLE = '0 0.063 0.125 0.188 0.25 0.313 0.375 0.438 0.5 0.563 0.625 0.688 0.75 0.813 0.875 0.938 1';
+const IDENTITY_COLOR_MATRIX = '1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0';
 
-// Closed-Form Naka-Rushton Photoreceptor HDR & Optical Dehaze Curve:
-// - When blackCut > 0 (foggy laptop webcam with ceiling glare like p04 = 80):
-//   Strips away the milky veil, anchors hair/eyebrows at rich dark tones (p = 1.58 toe),
-//   and expands face skin midtones up to bright studio luminance (0.62) while rolling off ceiling glare.
-// - When blackCut == 0 (good camera like iPhone where p04 < 32):
-//   Preserves 100% of true blacks and natural colors, gently lifting shadowed faces only when needed.
-function evalNakaRushtonHdrCurve(v, blackCut, whitePoint, targetMid, pToe, mHalf) {
-  const denom = Math.max(40, whitePoint - blackCut);
-  const t = Math.min(1, Math.max(0, (v - blackCut) / denom));
-  if (t <= 0) return 0;
-  if (t >= 1) return 1;
+// Smooth, bounded-slope (max derivative <= 1.50) tone curve:
+// - When fogRatio == 0 (clean iPhone/smartphone camera where p03 <= 32):
+//   Preserves 100% native blacks and highlights, applying only a gentle gamma nudge if the face is dark/bright.
+// - When fogRatio > 0 (foggy laptop webcam under ceiling light where p03 > 32):
+//   Deepens foggy gray hair (0.32 -> 0.23), gently lifts shadowed face skin (0.45 -> 0.51),
+//   and HOLDS bright office background walls (0.80 -> 0.82) so backgrounds NEVER blow out to white
+//   and skin shadows NEVER split into yellow/orange!
+const WEBCAM_XP = [0.0, 0.18, 0.32, 0.42, 0.52, 0.65, 0.80, 1.0];
+const WEBCAM_YP = [0.0, 0.08, 0.23, 0.44, 0.59, 0.72, 0.83, 0.98];
 
-  const tp = Math.pow(t, pToe);
-  const mp = Math.pow(mHalf, pToe);
-  const norm = (tp / (tp + mp)) * (1 + mp);
-  return Math.min(1, Math.max(0, norm));
+function evalBoundedDehazeCurve(normX, fogRatio, gammaClean = 1.0, userExpOffset = 0) {
+  const x = Math.min(1, Math.max(0, normX));
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+
+  // Clean camera curve (gentle gamma)
+  const yClean = Math.pow(x, gammaClean);
+
+  // Piecewise linear interpolation on the bounded-slope webcam dehaze & highlight-hold curve
+  let yWebcam = x;
+  for (let k = 0; k < WEBCAM_XP.length - 1; k++) {
+    const x0 = WEBCAM_XP[k];
+    const x1 = WEBCAM_XP[k + 1];
+    if (x >= x0 && x <= x1) {
+      const t = (x - x0) / Math.max(1e-5, x1 - x0);
+      yWebcam = WEBCAM_YP[k] + t * (WEBCAM_YP[k + 1] - WEBCAM_YP[k]);
+      break;
+    }
+  }
+
+  let y = yClean * (1 - fogRatio) + yWebcam * fogRatio;
+  if (Math.abs(userExpOffset) > 0.001) {
+    // Apply manual exposure slider smoothly in midtones without clipping black or white
+    y += userExpOffset * 4 * x * (1 - x);
+  }
+  return Math.min(1, Math.max(0, y));
 }
 
-function buildNakaRushtonSvgTable(blackCut, whitePoint, targetMid, pToe, mHalf, channelGain = 1.0) {
+function buildNeutralSvgTable(fogRatio, gammaClean, userExpOffset) {
   const pts = [];
   for (let i = 0; i <= 16; i++) {
-    const v = (i / 16) * 255;
-    let out = evalNakaRushtonHdrCurve(v, blackCut, whitePoint, targetMid, pToe, mHalf);
-    out = Math.min(1, Math.max(0, out * channelGain));
-    pts.push(out.toFixed(3));
+    const x = i / 16;
+    const y = evalBoundedDehazeCurve(x, fogRatio, gammaClean, userExpOffset);
+    pts.push(y.toFixed(3));
   }
   return pts.join(' ');
+}
+
+// Builds a Row-Sum = 1.0 3x3 Color Matrix (plus SVG 4x5 string) that:
+// 1. Is 100% neutral-preserving: M * [v, v, v]^T = [v, v, v]^T for all v (black hair, gray shadows, white shirts & walls never get tinted!).
+// 2. Cancels per-channel S-curve chroma inflation (s = 1 - 0.24 * fogRatio).
+// 3. Neutralizes fluorescent webcam yellow-green skin cast (where G > B) by damping excess G and lifting B proportionally to (G - B).
+function buildAntiYellowColorMatrix(fogRatio, yellowStrength = 1.0) {
+  const f = Math.min(1, Math.max(0, fogRatio));
+  if (f < 0.02) {
+    return {
+      m: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+      svgString: IDENTITY_COLOR_MATRIX
+    };
+  }
+
+  const s = 1.0 - f * 0.24; // 0.76 at full webcam fog
+  const lr = 0.2126;
+  const lg = 0.7152;
+  const lb = 0.0722;
+
+  const s00 = lr * (1 - s) + s;
+  const s01 = lg * (1 - s);
+  const s02 = lb * (1 - s);
+  const s10 = lr * (1 - s);
+  const s11 = lg * (1 - s) + s;
+  const s12 = lb * (1 - s);
+  const s20 = lr * (1 - s);
+  const s21 = lg * (1 - s);
+  const s22 = lb * (1 - s) + s;
+
+  const yScale = Math.min(1.25, Math.max(0.5, yellowStrength));
+  const kG = f * 0.15 * yScale;
+  const kB = f * 0.32 * yScale;
+
+  // M = Mantiyellow * Msat where Mantiyellow = [[1, 0, 0], [0, 1-kG, kG], [0, kB, 1-kB]]
+  const m00 = s00;
+  const m01 = s01;
+  const m02 = s02;
+
+  const m10 = (1 - kG) * s10 + kG * s20;
+  const m11 = (1 - kG) * s11 + kG * s21;
+  const m12 = (1 - kG) * s12 + kG * s22;
+
+  const m20 = kB * s10 + (1 - kB) * s20;
+  const m21 = kB * s11 + (1 - kB) * s21;
+  const m22 = kB * s12 + (1 - kB) * s22;
+
+  const m = [m00, m01, m02, m10, m11, m12, m20, m21, m22];
+  const svgString = `${m00.toFixed(4)} ${m01.toFixed(4)} ${m02.toFixed(4)} 0 0  ${m10.toFixed(4)} ${m11.toFixed(4)} ${m12.toFixed(4)} 0 0  ${m20.toFixed(4)} ${m21.toFixed(4)} ${m22.toFixed(4)} 0 0  0 0 0 1 0`;
+  return { m, svgString };
 }
 
 let analyzerCanvas = null;
@@ -233,6 +303,7 @@ export function analyzeVideoScene(
       gamma: 1.0,
       dehazeFloor: 0,
       isFoggyWebcam: false,
+      colorMatrix: IDENTITY_COLOR_MATRIX,
       tableR: DEFAULT_TABLE,
       tableG: DEFAULT_TABLE,
       tableB: DEFAULT_TABLE
@@ -256,8 +327,6 @@ export function analyzeVideoScene(
     let focusCount = 0;
     let midFocusLum = 0;
     let midFocusCount = 0;
-    let brightPixels = 0;
-    let sumR = 0;
     let sumG = 0;
     let sumB = 0;
     let colorSamples = 0;
@@ -277,10 +346,8 @@ export function analyzeVideoScene(
       const lum = Math.min(255, Math.max(0, Math.round(0.299 * r + 0.587 * g + 0.114 * b)));
       hist[lum]++;
       totalLum += lum;
-      if (lum > 190) brightPixels++;
 
-      if (lum > 35 && lum < 205) {
-        sumR += r;
+      if (lum > 40 && lum < 195) {
         sumG += g;
         sumB += b;
         colorSamples++;
@@ -292,7 +359,6 @@ export function analyzeVideoScene(
       if (Math.abs(x - fx) <= boxRx && Math.abs(y - fy) <= boxRy) {
         focusLum += lum;
         focusCount++;
-        // Ignore bright ceiling lights (>182) and deep black hair (<25) when measuring face brightness
         if (lum >= 25 && lum <= 182) {
           midFocusLum += lum;
           midFocusCount++;
@@ -302,26 +368,14 @@ export function analyzeVideoScene(
 
     let acc = 0;
     let p03 = 0;
-    let p12 = 0;
-    let p98 = 250;
     let found03 = false;
-    let found12 = false;
     const t03 = pixelCount * 0.03;
-    const t12 = pixelCount * 0.12;
-    const t98 = pixelCount * 0.98;
 
     for (let v = 0; v < 256; v++) {
       acc += hist[v];
       if (!found03 && acc >= t03) {
         p03 = v;
         found03 = true;
-      }
-      if (!found12 && acc >= t12) {
-        p12 = v;
-        found12 = true;
-      }
-      if (acc >= t98) {
-        p98 = v;
         break;
       }
     }
@@ -333,23 +387,25 @@ export function analyzeVideoScene(
         ? midFocusLum / midFocusCount
         : rawFocusLum;
 
+    const avgG = colorSamples > 20 ? sumG / colorSamples : 128;
+    const avgB = colorSamples > 20 ? sumB / colorSamples : 124;
+    const rawYellowExcess = Math.max(0, avgG - avgB);
+
     if (!smoothedState) {
-      smoothedState = { p03, p12, p98, faceLum: detectedFaceLum };
+      smoothedState = { p03, faceLum: detectedFaceLum, yellowExcess: rawYellowExcess };
     } else {
-      smoothedState.p03 = smoothedState.p03 * 0.6 + p03 * 0.4;
-      smoothedState.p12 = smoothedState.p12 * 0.6 + p12 * 0.4;
-      smoothedState.p98 = smoothedState.p98 * 0.6 + p98 * 0.4;
-      smoothedState.faceLum = smoothedState.faceLum * 0.55 + detectedFaceLum * 0.45;
+      smoothedState.p03 = smoothedState.p03 * 0.65 + p03 * 0.35;
+      smoothedState.faceLum = smoothedState.faceLum * 0.6 + detectedFaceLum * 0.4;
+      smoothedState.yellowExcess = smoothedState.yellowExcess * 0.65 + rawYellowExcess * 0.35;
     }
 
     const sp03 = smoothedState.p03;
-    const sp12 = smoothedState.p12;
-    const sp98 = smoothedState.p98;
     const sFaceLum = smoothedState.faceLum;
+    const sYellowExcess = smoothedState.yellowExcess;
 
     const autoEnabled = manualAdjust?.autoLight !== false;
     const userExp = manualAdjust?.exposure || 0; // -25 .. +25
-    const userDehaze = manualAdjust?.dehaze || 0; // 0 .. 30
+    const userDehaze = manualAdjust?.dehaze || 0;
 
     if (!autoEnabled && userExp === 0 && userDehaze === 0) {
       return {
@@ -362,84 +418,40 @@ export function analyzeVideoScene(
         gamma: 1.0,
         dehazeFloor: 0,
         isFoggyWebcam: false,
+        colorMatrix: IDENTITY_COLOR_MATRIX,
         tableR: DEFAULT_TABLE,
         tableG: DEFAULT_TABLE,
         tableB: DEFAULT_TABLE
       };
     }
 
-    // Detect whether the camera is suffering from Laptop Webcam Optical Glare/Fog (sp03 > 32)
-    // vs a clean Smartphone/iPhone camera with true blacks (sp03 <= 32)
-    const isFoggyWebcam = sp03 > 32 || userDehaze > 0;
+    // Foggy Laptop Webcam Detection (sp03 > 32 indicates optical glare lifting black floor)
+    const fogRatio = autoEnabled
+      ? Math.min(1, Math.max(0, (sp03 - 30) / 42) + userDehaze / 40)
+      : Math.min(1, userDehaze / 30);
+    const isFoggyWebcam = fogRatio > 0.12;
 
-    // 1. Optical Glare Floor (blackCut):
-    // - On iPhone (sp03 ~ 10..25): autoBlackCut = 0 (never crushes shadows!)
-    // - On Laptop Webcam with ceiling glare (sp03 ~ 75..90): strips away the milky veil!
-    const autoBlackCut =
-      autoEnabled && sp03 > 32
-        ? Math.max(0, (sp03 - 14) * 0.85 + Math.max(0, sp12 - sp03) * 0.25)
-        : 0;
-    const blackCut = Math.min(115, Math.max(0, autoBlackCut + userDehaze * 1.1));
-    const whitePoint = Math.max(blackCut + 85, Math.min(254, sp98 * 0.985));
-    const denom = Math.max(50, whitePoint - blackCut);
+    // For clean cameras (iPhone, fogRatio == 0), compute gentle gamma if face is dark or overly bright
+    const normFace = Math.min(0.85, Math.max(0.15, sFaceLum / 255));
+    const targetClean = Math.min(0.64, Math.max(0.48, normFace * 0.6 + 0.56 * 0.4));
+    const gammaClean = Math.min(1.22, Math.max(0.82, Math.log(targetClean) / Math.log(normFace)));
 
-    // 2. Closed-Form Naka-Rushton Parameters:
-    // Calculate where the user's face sits after subtracting the glare floor
-    const faceT = Math.min(0.82, Math.max(0.14, (sFaceLum - blackCut) / denom));
-    const userExpOffset = (userExp / 25) * 0.16;
+    const userExpOffset = (userExp / 25) * 0.14;
+    const neutralTable = buildNeutralSvgTable(fogRatio, gammaClean, userExpOffset);
 
-    // Target studio face luminance: ~0.60 on foggy webcams, or gentle nudge on clean cameras
-    const rawTargetMid = isFoggyWebcam
-      ? 0.60 + userExpOffset
-      : Math.min(0.66, Math.max(0.48, faceT * 0.55 + 0.60 * 0.45 + userExpOffset));
-    const targetMid = Math.min(0.78, Math.max(0.38, rawTargetMid));
+    // Yellow fluorescent cast strength (around 1.0 when G - B >= 8)
+    const yellowStrength = Math.min(1.2, Math.max(0.5, sYellowExcess / 8));
+    const { svgString: colorMatrix } = buildAntiYellowColorMatrix(fogRatio, yellowStrength);
 
-    // Toe contrast exponent pToe:
-    // On foggy webcams (blackCut > 20), pToe = 1.52..1.65 anchors hair/eyebrows dark while expanding skin midtones!
-    // On clean iPhone cameras (blackCut == 0), pToe = 1.08 keeps gentle natural gradation.
-    const fogRatio = Math.min(1, blackCut / 75);
-    const pToe = 1.06 + fogRatio * 0.56;
-
-    // Exact analytical half-saturation point mHalf so f(faceT) == targetMid
-    const mHalf = Math.min(
-      0.75,
-      Math.max(0.10, faceT * Math.pow((1 - targetMid) / Math.max(0.08, targetMid), 1 / pToe))
-    );
-
-    // 3. Auto White Balance & Saturation Recovery (only active proportionally to webcam fog!)
-    let gainR = 1.0 + fogRatio * 0.04;
-    let gainG = 1.0;
-    let gainB = 1.0 - fogRatio * 0.03;
-    if (isFoggyWebcam && colorSamples > 40) {
-      const avgR = sumR / colorSamples;
-      const avgG = sumG / colorSamples;
-      const avgB = sumB / colorSamples;
-      const gray = (avgR + avgG + avgB) / 3;
-      const wbR = Math.min(1.08, Math.max(0.96, (gray / Math.max(1, avgR)) * 1.04));
-      const wbG = Math.min(1.02, Math.max(0.95, (gray / Math.max(1, avgG)) * 0.99));
-      const wbB = Math.min(1.04, Math.max(0.92, (gray / Math.max(1, avgB)) * 0.97));
-      gainR = 1.0 * (1 - fogRatio) + wbR * fogRatio;
-      gainG = 1.0 * (1 - fogRatio) + wbG * fogRatio;
-      gainB = 1.0 * (1 - fogRatio) + wbB * fogRatio;
-    }
-
-    const tableR = buildNakaRushtonSvgTable(blackCut, whitePoint, targetMid, pToe, mHalf, gainR);
-    const tableG = buildNakaRushtonSvgTable(blackCut, whitePoint, targetMid, pToe, mHalf, gainG);
-    const tableB = buildNakaRushtonSvgTable(blackCut, whitePoint, targetMid, pToe, mHalf, gainB);
-
-    const sampleOut = evalNakaRushtonHdrCurve(sFaceLum, blackCut, whitePoint, targetMid, pToe, mHalf) * 255;
-    const boostNeeded = Math.min(32, Math.max(-16, Math.round(((sampleOut - sFaceLum) / 255) * 100)));
-
-    // Restore color saturation that was diluted by the webcam's white glare veil
-    const saturationBoost = Math.round(fogRatio * 34);
-    const contrastBoost = Math.round(fogRatio * 10);
+    const outFace = evalBoundedDehazeCurve(normFace, fogRatio, gammaClean, userExpOffset) * 255;
+    const boostNeeded = Math.min(24, Math.max(-14, Math.round(((outFace - sFaceLum) / 255) * 100)));
     const lumPct = Math.round((sFaceLum / 255) * 100);
 
     let status = 'OPTIMAL';
     let label = 'AF • Kamera Natural HD';
-    if (blackCut > 22) {
+    if (fogRatio > 0.25) {
       status = 'BRIGHT';
-      label = 'AF • Anti-Kabut & Penjernih Webcam Aktif';
+      label = 'AF • Anti-Kabut & Warna Natural Aktif';
     } else if (sFaceLum < 105) {
       status = 'LOW_LIGHT';
       label = 'AF • Pencerah Cahaya Natural';
@@ -453,14 +465,15 @@ export function analyzeVideoScene(
       status,
       label,
       boostNeeded,
-      contrastBoost,
-      saturationBoost,
-      gamma: Number(mHalf.toFixed(2)),
-      dehazeFloor: Number((blackCut / 255).toFixed(3)),
+      contrastBoost: 0,
+      saturationBoost: 0,
+      gamma: Number(gammaClean.toFixed(2)),
+      dehazeFloor: Number(fogRatio.toFixed(3)),
       isFoggyWebcam,
-      tableR,
-      tableG,
-      tableB
+      colorMatrix,
+      tableR: neutralTable,
+      tableG: neutralTable,
+      tableB: neutralTable
     };
   } catch (e) {
     return {
@@ -473,6 +486,7 @@ export function analyzeVideoScene(
       gamma: 1.0,
       dehazeFloor: 0,
       isFoggyWebcam: false,
+      colorMatrix: IDENTITY_COLOR_MATRIX,
       tableR: DEFAULT_TABLE,
       tableG: DEFAULT_TABLE,
       tableB: DEFAULT_TABLE
@@ -482,7 +496,7 @@ export function analyzeVideoScene(
 
 // Adaptive Dual-Path Computational ISP for Captured Photos:
 // - Path A (Clean Smartphone / iPhone Camera, p03 <= 32): Non-destructive, color-true gentle exposure.
-// - Path B (Foggy Laptop Webcam with Ceiling Glare, p03 > 32): 2D Spatial Glare Subtraction + Naka-Rushton HDR Dehaze + Color Recovery.
+// - Path B (Foggy Laptop Webcam with Ceiling Glare, p03 > 32): Subtle top-glare balancing + bounded-slope dehaze curve + Row-Sum-1 Anti-Yellow Matrix.
 export function processIntelligentCapture(ctx, width, height, options = {}) {
   if (!ctx || !width || !height) return;
   const {
@@ -500,7 +514,6 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
   }
 
   try {
-    // First sample scene histogram & build a 32x24 2D spatial illumination map to detect & cancel uneven ceiling glare
     const gridW = 32;
     const gridH = 24;
     const smallCanvas = document.createElement('canvas');
@@ -508,14 +521,14 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
     smallCanvas.height = gridH;
     const smallCtx = smallCanvas.getContext('2d', { willReadFrequently: true });
     try {
-      smallCtx.filter = 'blur(3px)';
+      smallCtx.filter = 'blur(4px)';
     } catch (e) {}
     smallCtx.drawImage(ctx.canvas, 0, 0, gridW, gridH);
     const smallData = smallCtx.getImageData(0, 0, gridW, gridH).data;
     const illumGrid = new Float32Array(gridW * gridH);
     for (let idx = 0; idx < gridW * gridH; idx++) {
       const si = idx * 4;
-      illumGrid[idx] = 0.299 * smallData[si] + 0.587 * smallData[si + 1] + 0.114 * smallData[si + 2];
+      illumGrid[idx] = (0.299 * smallData[si] + 0.587 * smallData[si + 1] + 0.114 * smallData[si + 2]) / 255;
     }
 
     const imgData = ctx.getImageData(0, 0, width, height);
@@ -526,7 +539,6 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
     let focusCount = 0;
     let midFocusLum = 0;
     let midFocusCount = 0;
-    let sumR = 0;
     let sumG = 0;
     let sumB = 0;
     let colorSamples = 0;
@@ -546,8 +558,7 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
       hist[lum]++;
       sumLum += lum;
 
-      if (lum > 35 && lum < 205) {
-        sumR += r;
+      if (lum > 40 && lum < 195) {
         sumG += g;
         sumB += b;
         colorSamples++;
@@ -569,26 +580,12 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
     const totalSamples = Math.max(1, Math.floor(data.length / step));
     let acc = 0;
     let p03 = 0;
-    let p12 = 0;
-    let p98 = 250;
-    let found03 = false;
-    let found12 = false;
     const t03 = totalSamples * 0.03;
-    const t12 = totalSamples * 0.12;
-    const t98 = totalSamples * 0.98;
 
     for (let v = 0; v < 256; v++) {
       acc += hist[v];
-      if (!found03 && acc >= t03) {
+      if (acc >= t03) {
         p03 = v;
-        found03 = true;
-      }
-      if (!found12 && acc >= t12) {
-        p12 = v;
-        found12 = true;
-      }
-      if (acc >= t98) {
-        p98 = v;
         break;
       }
     }
@@ -600,63 +597,31 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
         ? midFocusLum / midFocusCount
         : rawFocusLum;
 
-    const isFoggyWebcam = p03 > 32 || userDehaze > 0;
-    const autoBlackCut =
-      autoEnabled && p03 > 32
-        ? Math.max(0, (p03 - 14) * 0.85 + Math.max(0, p12 - p03) * 0.25)
-        : 0;
-    const blackCut = Math.min(115, Math.max(0, autoBlackCut + userDehaze * 1.1));
-    const whitePoint = Math.max(blackCut + 85, Math.min(254, p98 * 0.985));
-    const denom = Math.max(50, whitePoint - blackCut);
+    const fogRatio = autoEnabled
+      ? Math.min(1, Math.max(0, (p03 - 30) / 42) + userDehaze / 40)
+      : Math.min(1, userDehaze / 30);
 
-    const faceT = Math.min(0.82, Math.max(0.14, (faceLum - blackCut) / denom));
-    const userExpOffset = (userExp / 25) * 0.16;
-    const rawTargetMid = isFoggyWebcam
-      ? 0.60 + userExpOffset
-      : Math.min(0.66, Math.max(0.48, faceT * 0.55 + 0.60 * 0.45 + userExpOffset));
-    const targetMid = Math.min(0.78, Math.max(0.38, rawTargetMid));
+    const normFace = Math.min(0.85, Math.max(0.15, faceLum / 255));
+    const targetClean = Math.min(0.64, Math.max(0.48, normFace * 0.6 + 0.56 * 0.4));
+    const gammaClean = Math.min(1.22, Math.max(0.82, Math.log(targetClean) / Math.log(normFace)));
+    const userExpOffset = (userExp / 25) * 0.14;
 
-    const fogRatio = Math.min(1, blackCut / 75);
-    const pToe = 1.06 + fogRatio * 0.56;
-    const mHalf = Math.min(
-      0.75,
-      Math.max(0.10, faceT * Math.pow((1 - targetMid) / Math.max(0.08, targetMid), 1 / pToe))
-    );
-
-    // If clean camera (blackCut == 0) and exposure is already balanced, keep 100% pure native pixels!
-    if (blackCut < 2 && Math.abs(targetMid - faceT) < 0.03 && userExp === 0) {
+    if (fogRatio < 0.03 && Math.abs(gammaClean - 1.0) < 0.04 && userExp === 0) {
       return;
     }
 
-    let gainR = 1.0 + fogRatio * 0.04;
-    let gainG = 1.0;
-    let gainB = 1.0 - fogRatio * 0.03;
-    if (isFoggyWebcam && colorSamples > 50) {
-      const avgR = sumR / colorSamples;
-      const avgG = sumG / colorSamples;
-      const avgB = sumB / colorSamples;
-      const gray = (avgR + avgG + avgB) / 3;
-      const wbR = Math.min(1.08, Math.max(0.96, (gray / Math.max(1, avgR)) * 1.04));
-      const wbG = Math.min(1.02, Math.max(0.95, (gray / Math.max(1, avgG)) * 0.99));
-      const wbB = Math.min(1.04, Math.max(0.92, (gray / Math.max(1, avgB)) * 0.97));
-      gainR = 1.0 * (1 - fogRatio) + wbR * fogRatio;
-      gainG = 1.0 * (1 - fogRatio) + wbG * fogRatio;
-      gainB = 1.0 * (1 - fogRatio) + wbB * fogRatio;
-    }
-
-    const lutR = new Uint8ClampedArray(256);
-    const lutG = new Uint8ClampedArray(256);
-    const lutB = new Uint8ClampedArray(256);
+    const lut = new Float32Array(256);
     for (let v = 0; v < 256; v++) {
-      const norm = evalNakaRushtonHdrCurve(v, blackCut, whitePoint, targetMid, pToe, mHalf) * 255;
-      lutR[v] = Math.min(255, Math.max(0, Math.round(norm * gainR)));
-      lutG[v] = Math.min(255, Math.max(0, Math.round(norm * gainG)));
-      lutB[v] = Math.min(255, Math.max(0, Math.round(norm * gainB)));
+      lut[v] = evalBoundedDehazeCurve(v / 255, fogRatio, gammaClean, userExpOffset) * 255;
     }
 
-    // Proportional saturation recovery only for foggy webcams (1.0 on iPhone -> up to 1.36 on heavy webcam fog)
-    const satFactor = 1.0 + fogRatio * 0.36;
-    const spatialGlareStrength = fogRatio * 0.24;
+    const avgG = colorSamples > 20 ? sumG / colorSamples : 128;
+    const avgB = colorSamples > 20 ? sumB / colorSamples : 124;
+    const yellowExcess = Math.max(0, avgG - avgB);
+    const yellowStrength = Math.min(1.2, Math.max(0.5, yellowExcess / 8));
+    const { m } = buildAntiYellowColorMatrix(fogRatio, yellowStrength);
+
+    const spatialGlareStrength = fogRatio * 0.15;
 
     for (let y = 0; y < height; y++) {
       const gy = Math.min(gridH - 1, Math.floor((y / height) * gridH));
@@ -667,32 +632,25 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
         let g = data[i + 1];
         let b = data[i + 2];
 
-        // 2D Spatial Ceiling Glare Subtraction (removes uneven overhead light haze bleeding across hair/forehead)
-        if (spatialGlareStrength > 0.02) {
+        if (spatialGlareStrength > 0.01) {
           const gx = Math.min(gridW - 1, Math.floor((x / width) * gridW));
           const localIllum = illumGrid[gy * gridW + gx];
-          if (localIllum > faceLum + 8 && r < 238 && g < 238 && b < 238) {
-            const excessGlare = (localIllum - faceLum) * spatialGlareStrength;
-            r = Math.max(0, Math.round(r - excessGlare));
-            g = Math.max(0, Math.round(g - excessGlare));
-            b = Math.max(0, Math.round(b - excessGlare));
+          if (localIllum > 0.62) {
+            const excess = (localIllum - 0.62) * spatialGlareStrength * 255;
+            const scale = 1 / Math.max(0.75, 1 - (localIllum - 0.62) * spatialGlareStrength * 0.5);
+            r = Math.min(255, Math.max(0, Math.round((r - excess) * scale)));
+            g = Math.min(255, Math.max(0, Math.round((g - excess) * scale)));
+            b = Math.min(255, Math.max(0, Math.round((b - excess) * scale)));
           }
         }
 
-        const nr = lutR[r];
-        const ng = lutG[g];
-        const nb = lutB[b];
+        const r1 = lut[r];
+        const g1 = lut[g];
+        const b1 = lut[b];
 
-        if (satFactor > 1.01) {
-          const luma = 0.299 * nr + 0.587 * ng + 0.114 * nb;
-          data[i] = Math.min(255, Math.max(0, Math.round(luma + (nr - luma) * satFactor)));
-          data[i + 1] = Math.min(255, Math.max(0, Math.round(luma + (ng - luma) * satFactor)));
-          data[i + 2] = Math.min(255, Math.max(0, Math.round(luma + (nb - luma) * satFactor)));
-        } else {
-          data[i] = nr;
-          data[i + 1] = ng;
-          data[i + 2] = nb;
-        }
+        data[i] = Math.min(255, Math.max(0, Math.round(r1 * m[0] + g1 * m[1] + b1 * m[2])));
+        data[i + 1] = Math.min(255, Math.max(0, Math.round(r1 * m[3] + g1 * m[4] + b1 * m[5])));
+        data[i + 2] = Math.min(255, Math.max(0, Math.round(r1 * m[6] + g1 * m[7] + b1 * m[8])));
       }
     }
 
