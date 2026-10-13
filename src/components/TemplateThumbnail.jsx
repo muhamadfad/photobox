@@ -1,8 +1,9 @@
 import React from 'react';
 
 // Generates an authentic, vector-crisp miniature preview for each of the 30 photobooth templates
-export default function TemplateThumbnail({ templateId, className = '' }) {
-  switch (templateId) {
+export default function TemplateThumbnail({ templateId, template, className = '' }) {
+  const id = templateId || template?.id;
+  switch (id) {
     // VIRAL 1: 1989 TAYLOR'S DENIM
     case 'denim_1989':
       return (
@@ -33,20 +34,27 @@ export default function TemplateThumbnail({ templateId, className = '' }) {
     // VIRAL 2: ROBLOX XXL STARRY LYRICS
     case 'roblox_xxl':
       return (
-        <div className={`w-full aspect-[9/14] bg-[#0b192e] p-1 rounded-sm relative flex flex-col justify-between overflow-hidden shadow-inner border-2 border-white ${className}`}>
-          <div className="text-[4.5px] text-white/90 text-center font-mono py-0.2 border-b border-white">
-            I will forever ★
+        <div className={`w-full aspect-[9/14] bg-gradient-to-b from-[#071120] via-[#0f2547] to-[#081529] p-1 rounded-sm relative flex flex-col justify-between overflow-hidden shadow-inner border-2 border-white ${className}`}>
+          <div className="bg-white text-[#071120] text-[3.8px] text-center font-serif italic font-bold py-0.2 px-0.5 rounded-2xs">
+            I still remember ✦
           </div>
           <div className="flex flex-col gap-0.5 my-0.5">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="aspect-[16/9] bg-[#162e52] rounded-2xs border border-white/60 flex items-center justify-center">
-                <div className="w-1 h-1 rounded-full bg-white/30" />
-              </div>
+              <React.Fragment key={i}>
+                {i === 2 && (
+                  <div className="bg-white/95 text-[#071120] text-[3.5px] text-center font-mono font-bold py-0.1 rounded-2xs">
+                    Backseat secrets
+                  </div>
+                )}
+                <div className="aspect-[16/9] bg-[#162e52] rounded-2xs border border-sky-200/60 flex items-center justify-center">
+                  <div className="w-1 h-1 rounded-full bg-sky-200/40" />
+                </div>
+              </React.Fragment>
             ))}
           </div>
-          <div className="flex justify-between items-center text-white px-0.5 border-t border-white pt-0.5">
-            <span className="text-[4.5px] font-black uppercase">ROBLOX</span>
-            <span className="text-[8px] font-black text-sky-300">XXL</span>
+          <div className="flex justify-between items-center text-white px-0.5 border-t border-white/70 pt-0.5">
+            <span className="text-[4.5px] font-black uppercase tracking-tighter">ROBLOX</span>
+            <span className="text-[8px] font-black text-sky-300 leading-none">XXL</span>
           </div>
         </div>
       );
@@ -218,12 +226,12 @@ export default function TemplateThumbnail({ templateId, className = '' }) {
         </div>
       );
 
-    // PINTEREST 5: VINTAGE MAHOGANY WOOD
+    // PINTAGE 5: VINTAGE MAHOGANY WOOD
     case 'vintage_mahogany':
       return (
         <div className={`w-full aspect-[9/14] bg-[#361e11] p-1 rounded-sm relative flex flex-col justify-between overflow-hidden shadow-inner text-amber-100 ${className}`}>
-          <div className="text-center text-[4.5px] font-serif border-b border-amber-600/30 pb-0.5">
-            💡 PHOTO PLACE
+          <div className="text-center text-[4.5px] font-serif border-b border-amber-600/30 pb-0.5 tracking-widest">
+            ✦ PHOTO PLACE ✦
           </div>
           <div className="flex flex-col gap-1 my-0.5">
             {[...Array(3)].map((_, i) => (
@@ -417,8 +425,8 @@ export default function TemplateThumbnail({ templateId, className = '' }) {
         <div className={`w-full aspect-[9/14] airmail-border p-1 rounded-xl relative flex flex-col overflow-hidden shadow ${className}`}>
           <div className="bg-[#f8f5ee] rounded-lg p-1 h-full flex flex-col justify-between">
             <div className="flex justify-between items-center text-[5px] font-mono text-neutral-600">
-              <span className="font-bold">PAR AVION</span>
-              <span className="text-red-600">✉️</span>
+              <span className="font-bold text-blue-900">PAR AVION ✈</span>
+              <span className="text-red-700 font-bold border border-red-700 px-0.5 rounded-2xs text-[4px]">25¢</span>
             </div>
             <div className="flex flex-col gap-1 my-0.5">
               {[...Array(4)].map((_, i) => (
@@ -438,6 +446,7 @@ export default function TemplateThumbnail({ templateId, className = '' }) {
       );
 
     // 4. CAPTURE STORY NEWSPAPER
+    case 'editorial':
     case 'capture_story':
       return (
         <div className={`w-full aspect-[9/14] bg-[#fdfbf6] p-1.5 rounded border border-neutral-400 flex flex-col justify-between overflow-hidden shadow ${className}`}>
@@ -462,6 +471,7 @@ export default function TemplateThumbnail({ templateId, className = '' }) {
       );
 
     // 5. YE OLE LONDONER
+    case 'londoner':
     case 'ye_ole_londoner':
       return (
         <div className={`w-full aspect-[9/14] bg-[#f5f2e9] p-1.5 rounded border border-neutral-400 flex flex-col justify-between overflow-hidden shadow ${className}`}>
@@ -481,8 +491,8 @@ export default function TemplateThumbnail({ templateId, className = '' }) {
               <div className="aspect-[4/3] bg-neutral-900 border border-black" />
             </div>
           </div>
-          <div className="border border-black text-center text-[5px] font-serif py-0.5 bg-[#eae4d3]">
-            👑 Advertisement Goes Here! 👑
+          <div className="border border-black text-center text-[4.5px] font-serif py-0.5 bg-[#eae4d3] font-bold">
+            ★ LONDON 1888 EDITION ★
           </div>
         </div>
       );
@@ -492,7 +502,7 @@ export default function TemplateThumbnail({ templateId, className = '' }) {
       return (
         <div className={`w-full aspect-[9/14] bg-gradient-to-b from-sky-400 to-sky-200 p-1 rounded-xl relative flex flex-col justify-between overflow-hidden shadow ${className}`}>
           <div className="text-center pt-0.5">
-            <div className="text-[5px] text-sky-800 font-sans tracking-widest font-bold">☁️ HARU FILM ☁️</div>
+            <div className="text-[5px] text-sky-900 font-sans tracking-widest font-bold">✦ HARU FILM ✦</div>
           </div>
           <div className="flex flex-col gap-1 my-1">
             {[...Array(4)].map((_, i) => (
@@ -557,8 +567,8 @@ export default function TemplateThumbnail({ templateId, className = '' }) {
     case 'purikura_sparkle':
       return (
         <div className={`w-full aspect-[9/14] bg-gradient-to-b from-pink-400 to-rose-300 p-1 rounded-xl flex flex-col justify-between overflow-hidden shadow ${className}`}>
-          <div className="text-center text-[6px] font-bold text-white drop-shadow">
-            💖 プリクラ PURIKURA ✨
+          <div className="text-center text-[5.5px] font-bold text-white drop-shadow">
+            ★ プリクラ PURIKURA ★
           </div>
           <div className="flex flex-col gap-1 my-0.5">
             {[...Array(4)].map((_, i) => (
@@ -693,24 +703,24 @@ export default function TemplateThumbnail({ templateId, className = '' }) {
       );
 
     // 15. VOGUE FASHION MAGAZINE
+    case 'vogue_chic':
     case 'vogue_minimal':
       return (
-        <div className={`w-full aspect-[9/14] bg-white p-1.5 rounded border border-neutral-300 flex flex-col justify-between overflow-hidden shadow ${className}`}>
-          <div className="text-center font-serif font-black text-xl text-black leading-none tracking-widest">
-            VOGUE
-          </div>
-          <div className="text-[4px] font-serif text-center uppercase tracking-widest text-neutral-500">
-            THE AUTUMN ISSUE
-          </div>
-          <div className="flex flex-col gap-1 my-1">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="aspect-[4/3] bg-neutral-900 flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
-              </div>
-            ))}
-          </div>
-          <div className="text-[4px] font-serif uppercase tracking-widest text-center text-black font-bold">
-            TIMELESS BEAUTY
+        <div className={`w-full aspect-[9/14] bg-black p-1 rounded border border-neutral-800 flex flex-col justify-between overflow-hidden shadow ${className}`}>
+          <div className="bg-white p-1 rounded-xs h-full flex flex-col justify-between">
+            <div className="text-center font-serif font-black text-[10px] text-black leading-none tracking-widest border-b border-black pb-0.5">
+              ELEGANCE.
+            </div>
+            <div className="flex flex-col gap-0.5 my-0.5">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="aspect-[16/9] bg-neutral-900 flex items-center justify-center">
+                  <div className="w-1 h-1 rounded-full bg-white/30" />
+                </div>
+              ))}
+            </div>
+            <div className="text-[4px] font-serif uppercase tracking-widest text-center text-black font-bold border-t border-black pt-0.5">
+              THE AUTUMN ISSUE
+            </div>
           </div>
         </div>
       );
@@ -719,321 +729,229 @@ export default function TemplateThumbnail({ templateId, className = '' }) {
     case 'cafe_receipt':
       return (
         <div className={`w-full aspect-[9/14] bg-[#292524] p-1 rounded flex flex-col justify-between overflow-hidden shadow ${className}`}>
-          <div className="bg-[#fafaf9] p-1 rounded-sm h-full flex flex-col justify-between font-mono text-[5px]">
-            <div className="text-center font-bold">PHOTO CAFE</div>
-            <div className="flex flex-col gap-1 my-1">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="aspect-[4/3] bg-neutral-900 flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
+          <div className="bg-[#fafaf9] p-1 rounded-sm h-full flex flex-col justify-between font-mono text-[5px] text-stone-900">
+            <div className="text-center font-bold border-b border-dashed border-stone-400 pb-0.5">PHOTO CAFE</div>
+            <div className="flex flex-col gap-0.5 my-0.5">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="aspect-[16/9] bg-neutral-900 flex items-center justify-center">
+                  <div className="w-1 h-1 rounded-full bg-white/30" />
                 </div>
               ))}
             </div>
             <div className="text-center border-t border-dashed border-neutral-400 pt-0.5">
-              <div className="h-2 bg-neutral-900 my-0.5" />
+              <div className="h-1.5 bg-neutral-900 my-0.5" />
               <div className="text-[4px]">THANK YOU! :)</div>
             </div>
           </div>
         </div>
       );
 
-    // 17. WEDDING GOLD RIBBON
-    case 'wedding_romance':
-      return (
-        <div className={`w-full aspect-[9/14] bg-[#451a03] p-1.5 rounded-md flex flex-col justify-between overflow-hidden shadow ${className}`}>
-          <div className="bg-[#fffbeb] p-1 rounded h-full flex flex-col justify-between text-amber-900 border border-amber-400/50">
-            <div className="text-center">
-              <span className="text-[7px]">💍</span>
-              <span className="font-cursive text-[9px] font-bold block leading-none">Wedding Day</span>
-            </div>
-            <div className="flex flex-col gap-1 my-1">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="aspect-[4/3] bg-neutral-900 border border-amber-600/30 rounded flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
-                </div>
-              ))}
-            </div>
-            <div className="text-center font-serif text-[4px] uppercase tracking-wider text-amber-800">
-              TOGETHER FOREVER
-            </div>
-          </div>
-        </div>
-      );
-
-    // 18. CONCERT VIP FESTIVAL PASS
+    // 17. CONCERT VIP FESTIVAL PASS
     case 'concert_vip':
       return (
-        <div className={`w-full aspect-[9/14] bg-[#18181b] p-1 rounded-lg border border-rose-500/30 flex flex-col justify-between overflow-hidden shadow ${className}`}>
+        <div className={`w-full aspect-[9/14] bg-[#18181b] p-1 rounded-lg border border-rose-500/40 flex flex-col justify-between overflow-hidden shadow ${className}`}>
           <div className="w-4 h-1 bg-white/40 mx-auto rounded-full mb-0.5" />
-          <div className="bg-rose-600 text-white text-[5px] text-center font-bold py-0.5 rounded">
+          <div className="bg-rose-600 text-white text-[4.5px] text-center font-bold py-0.5 rounded">
             VIP ALL ACCESS
           </div>
-          <div className="flex flex-col gap-1 my-1">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="aspect-[4/3] bg-neutral-900 border border-rose-500/20 rounded flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
+          <div className="flex flex-col gap-0.5 my-0.5">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="aspect-[16/9] bg-neutral-900 border border-rose-500/30 rounded-2xs flex items-center justify-center">
+                <div className="w-1 h-1 rounded-full bg-white/30" />
               </div>
             ))}
           </div>
-          <div className="text-[4px] font-mono text-center text-rose-400">
+          <div className="text-[4px] font-mono text-center text-rose-400 font-bold">
             SUMMER SONIC 2026
           </div>
         </div>
       );
 
-    // 19. CINEMA GOLDEN TICKET
+    // 18. VINTAGE CINEMA PERFORATED STUB
+    case 'cinema_stub':
     case 'golden_ticket':
       return (
-        <div className={`w-full aspect-[9/14] bg-[#854d0e] p-1 rounded flex flex-col justify-between overflow-hidden shadow ${className}`}>
-          <div className="bg-[#fefce8] p-1 rounded h-full flex flex-col justify-between border-2 border-yellow-600 text-amber-900">
-            <div className="text-center font-serif font-black text-[7px] border-b border-yellow-600 pb-0.5">
-              GOLDEN TICKET
+        <div className={`w-full aspect-[9/14] bg-[#78350f] p-1 rounded flex flex-col justify-between overflow-hidden shadow ${className}`}>
+          <div className="bg-[#fef3c7] p-1 rounded h-full flex flex-col justify-between border border-[#78350f] text-[#78350f]">
+            <div className="text-center font-serif font-black text-[5px] border-b border-dashed border-[#78350f] pb-0.5">
+              GRAND PALACE
             </div>
-            <div className="flex flex-col gap-1 my-1">
+            <div className="flex flex-col gap-0.5 my-0.5">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="aspect-[4/3] bg-neutral-900 border border-yellow-600 rounded-xs flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
+                <div key={i} className="aspect-[16/9] bg-neutral-900 border border-[#78350f]/50 rounded-2xs flex items-center justify-center">
+                  <div className="w-1 h-1 rounded-full bg-white/30" />
                 </div>
               ))}
             </div>
-            <div className="text-[4.5px] font-serif text-center font-bold">
-              ADMIT TWO ONLY
+            <div className="text-[4px] font-mono text-center font-bold border-t border-dashed border-[#78350f] pt-0.5 text-red-700">
+              ADMIT ONE • C14
             </div>
           </div>
         </div>
       );
 
-    // 20. MIDNIGHT EXPRESS TRAIN
+    // 19. TOKYO METRO EXPRESS PASS
+    case 'train_pass':
     case 'train_sleeper':
       return (
-        <div className={`w-full aspect-[9/14] bg-[#1e3a8a] p-1 rounded flex flex-col justify-between overflow-hidden shadow ${className}`}>
-          <div className="bg-[#f8fafc] p-1 rounded h-full flex flex-col justify-between text-blue-900">
-            <div className="text-center font-serif font-bold text-[6px] border-b border-blue-900 pb-0.5">
-              ORIENT EXPRESS
+        <div className={`w-full aspect-[9/14] bg-[#0f766e] p-1 rounded flex flex-col justify-between overflow-hidden shadow ${className}`}>
+          <div className="bg-[#f0fdfa] p-1 rounded h-full flex flex-col justify-between text-[#115e59] font-mono">
+            <div className="bg-[#0f766e] text-white text-center font-bold text-[4.5px] py-0.5 rounded-2xs">
+              SHINJUKU ➔ SHIBUYA
             </div>
-            <div className="flex flex-col gap-1 my-1">
+            <div className="flex flex-col gap-0.5 my-0.5">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="aspect-[4/3] bg-neutral-900 border border-blue-900/30 flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
+                <div key={i} className="aspect-[16/9] bg-neutral-900 border border-[#0f766e]/40 flex items-center justify-center">
+                  <div className="w-1 h-1 rounded-full bg-white/30" />
                 </div>
               ))}
             </div>
-            <div className="text-[4px] font-mono text-center">
-              PARIS ➔ VENICE
+            <div className="text-[4px] font-bold text-center border-t border-dashed border-[#0f766e]/40 pt-0.5">
+              ¥320 FARE PAID
             </div>
           </div>
         </div>
       );
 
-    // 21. ART GALLERY PASS
-    case 'museum_pass':
+    // 20. THE SUNDAY MORNING POST
+    case 'morning_post':
       return (
-        <div className={`w-full aspect-[9/14] bg-black p-1 rounded flex flex-col justify-between overflow-hidden shadow ${className}`}>
-          <div className="bg-white p-1 rounded h-full flex flex-col justify-between text-black font-sans">
-            <div className="text-[6px] font-black uppercase tracking-tight">
-              MOCA GALLERY
+        <div className={`w-full aspect-[9/14] bg-[#e7e5e4] p-1 rounded border border-stone-300 flex flex-col justify-between overflow-hidden shadow ${className}`}>
+          <div className="bg-[#fafaf9] p-1 rounded-xs h-full flex flex-col justify-between text-stone-900">
+            <div className="text-center border-b-2 border-stone-900 pb-0.5">
+              <span className="font-serif font-black text-[5px] block tracking-tight">SUNDAY MORNING POST</span>
+              <span className="text-[3.5px] font-mono text-stone-500 block">SUNNY • 24°C</span>
             </div>
-            <div className="flex flex-col gap-1 my-1">
+            <div className="flex flex-col gap-0.5 my-0.5">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="aspect-[4/3] bg-neutral-900 flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
+                <div key={i} className="aspect-[16/9] bg-neutral-900 border border-stone-400 flex items-center justify-center">
+                  <div className="w-1 h-1 rounded-full bg-white/30" />
                 </div>
               ))}
             </div>
-            <div className="text-[4px] font-mono text-neutral-600">
-              AUTUMN EXHIBITION
+            <div className="text-[4px] font-serif font-bold text-center border-t border-stone-800 pt-0.5">
+              A PERFECT DAY TO SMILE
             </div>
           </div>
         </div>
       );
 
-    // 22. FRENCH LOVE LETTER
+    // 21. LE PETIT PARISIEN GAZETTE
+    case 'paris_gazette':
+      return (
+        <div className={`w-full aspect-[9/14] bg-[#c2b59b] p-1 rounded border border-stone-400 flex flex-col justify-between overflow-hidden shadow ${className}`}>
+          <div className="bg-[#f5edd6] p-1 rounded-xs h-full flex flex-col justify-between text-[#292524]">
+            <div className="text-center border-b border-[#292524] pb-0.5">
+              <span className="font-serif font-black text-[5.5px] block">LE PETIT PARISIEN</span>
+              <span className="text-[3.8px] font-serif italic block">L’Amour Toujours</span>
+            </div>
+            <div className="flex flex-col gap-0.5 my-0.5">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="aspect-[16/9] bg-neutral-900 border border-[#292524]/50 flex items-center justify-center">
+                  <div className="w-1 h-1 rounded-full bg-white/30" />
+                </div>
+              ))}
+            </div>
+            <div className="text-[3.8px] font-mono text-center border-t border-[#292524] pt-0.5 font-bold">
+              PARIS • ÉDITION SPÉCIALE
+            </div>
+          </div>
+        </div>
+      );
+
+    // 22. BILLBOARD RECORD WEEKLY TIMES
+    case 'record_times':
+      return (
+        <div className={`w-full aspect-[9/14] bg-[#292524] p-1 rounded flex flex-col justify-between overflow-hidden shadow ${className}`}>
+          <div className="bg-[#f5f5f4] p-1 rounded-xs h-full flex flex-col justify-between text-stone-900">
+            <div className="bg-stone-900 text-white text-center font-sans font-black text-[5px] py-0.5">
+              THE RECORD TIMES
+            </div>
+            <div className="flex flex-col gap-0.5 my-0.5">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="aspect-[16/9] bg-neutral-900 border border-stone-800 flex items-center justify-center">
+                  <div className="w-1 h-1 rounded-full bg-white/30" />
+                </div>
+              ))}
+            </div>
+            <div className="text-[4px] font-mono font-bold text-center border-t border-stone-800 pt-0.5">
+              TOP #1 HIT RECORD ★
+            </div>
+          </div>
+        </div>
+      );
+
+    // 23. FRENCH LOVE LETTER
     case 'love_letter':
       return (
         <div className={`w-full aspect-[9/14] bg-[#831843] p-1 rounded-lg flex flex-col justify-between overflow-hidden shadow ${className}`}>
           <div className="bg-[#fff1f2] p-1 rounded h-full flex flex-col justify-between text-pink-900">
-            <div className="text-center font-cursive text-[9px] font-bold">
+            <div className="text-center font-cursive text-[8px] font-bold border-b border-pink-200 pb-0.5">
               Lettre d’Amour
             </div>
-            <div className="flex flex-col gap-1 my-1">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="aspect-[4/3] bg-neutral-900 rounded border border-pink-300 flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
+            <div className="flex flex-col gap-0.5 my-0.5">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="aspect-[16/9] bg-neutral-900 rounded-2xs border border-pink-300 flex items-center justify-center">
+                  <div className="w-1 h-1 rounded-full bg-white/30" />
                 </div>
               ))}
             </div>
-            <div className="text-center text-[5px]">
-              🌹 FOREVER 🌹
+            <div className="text-center text-[4.5px] font-serif font-bold text-rose-800 border-t border-pink-200 pt-0.5">
+              ✦ WITH LOVE ♡ ✦
             </div>
           </div>
         </div>
       );
 
-    // 23. WASHI TAPE SCRAPBOOK
+    // 24. WASHI TAPE SCRAPBOOK
+    case 'scrapbook_kraft':
     case 'washi_scrapbook':
       return (
-        <div className={`w-full aspect-[9/14] bg-[#d97706] p-1 rounded flex flex-col justify-between overflow-hidden shadow ${className}`}>
+        <div className={`w-full aspect-[9/14] bg-[#78350f] p-1 rounded flex flex-col justify-between overflow-hidden shadow ${className}`}>
           <div className="bg-[#fef3c7] p-1 rounded h-full flex flex-col justify-between text-amber-950 relative">
-            <div className="w-6 h-1.5 bg-rose-400 -rotate-6 absolute -top-1 left-2 shadow text-[3px] text-white text-center font-mono">TAPE</div>
-            <div className="text-center font-sans font-bold text-[6px] pt-1">
+            <div className="w-6 h-1.5 bg-rose-400 -rotate-6 absolute -top-0.5 left-1.5 shadow text-[3px] text-white text-center font-mono">TAPE</div>
+            <div className="text-center font-mono font-bold text-[5px] pt-0.5 border-b border-amber-900/20 pb-0.5">
               OUR SCRAPBOOK
             </div>
-            <div className="flex flex-col gap-1 my-1">
+            <div className="flex flex-col gap-0.5 my-0.5">
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="aspect-[4/3] bg-neutral-900 rounded-xs flex items-center justify-center shadow-xs">
-                  <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
+                <div key={i} className="aspect-[16/9] bg-neutral-900 rounded-2xs flex items-center justify-center shadow-xs border border-white">
+                  <div className="w-1 h-1 rounded-full bg-white/30" />
                 </div>
               ))}
             </div>
-            <div className="text-[4px] font-cursive text-center">
-              best memories with you
+            <div className="text-[4.5px] font-cursive font-bold text-center text-amber-900">
+              best memories ♡
             </div>
           </div>
         </div>
       );
 
-    // 24. BOTANICAL PRESSED FLOWERS
-    case 'botanical_herbarium':
-      return (
-        <div className={`w-full aspect-[9/14] bg-[#14532d] p-1 rounded flex flex-col justify-between overflow-hidden shadow ${className}`}>
-          <div className="bg-[#f0fdf4] p-1 rounded h-full flex flex-col justify-between text-emerald-950">
-            <div className="text-center font-serif text-[6px] font-bold">
-              🌿 HERBARIUM 🌿
-            </div>
-            <div className="flex flex-col gap-1 my-1">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="aspect-[4/3] bg-neutral-900 border border-emerald-800/30 flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
-                </div>
-              ))}
-            </div>
-            <div className="text-[4px] font-serif italic text-center">
-              Memoria Dulcis • 2026
-            </div>
-          </div>
-        </div>
-      );
-
-    // 25. RETRO MATCHBOX LABEL
-    case 'vintage_matchbox':
-      return (
-        <div className={`w-full aspect-[9/14] bg-[#991b1b] p-1 rounded flex flex-col justify-between overflow-hidden shadow ${className}`}>
-          <div className="bg-[#fef2f2] p-1 rounded h-full flex flex-col justify-between text-red-950 border border-red-800">
-            <div className="text-center font-sans font-black text-[6px] bg-red-800 text-white py-0.5 rounded">
-              SAFETY MATCHES
-            </div>
-            <div className="flex flex-col gap-1 my-1">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="aspect-[4/3] bg-neutral-900 border border-red-800/40 flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
-                </div>
-              ))}
-            </div>
-            <div className="text-[4.5px] font-bold text-center text-red-900">
-              ★ SPARK OF JOY ★
-            </div>
-          </div>
-        </div>
-      );
-
-    // 26. Y2K TEEN POP MAG
-    case 'teen_pop_y2k':
-      return (
-        <div className={`w-full aspect-[9/14] bg-[#db2777] p-1 rounded-xl flex flex-col justify-between overflow-hidden shadow ${className}`}>
-          <div className="text-center font-sans font-black text-[9px] text-yellow-300 drop-shadow">
-            POP TEEN!
-          </div>
-          <div className="flex flex-col gap-1 my-0.5">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="aspect-[4/3] bg-neutral-900 border border-yellow-300 rounded flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
-              </div>
-            ))}
-          </div>
-          <div className="text-[4px] font-bold text-white text-center">
-            SUPERSTAR OF THE YEAR!
-          </div>
-        </div>
-      );
-
-    // 27. STREET ZINE PUNK
-    case 'street_zine':
-      return (
-        <div className={`w-full aspect-[9/14] bg-[#262626] p-1 rounded flex flex-col justify-between overflow-hidden shadow ${className}`}>
-          <div className="bg-white text-black text-[6px] font-mono font-black text-center py-0.5">
-            RAW REALITY #07
-          </div>
-          <div className="flex flex-col gap-1 my-1">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="aspect-[4/3] bg-neutral-900 border border-black flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-white/30" />
-              </div>
-            ))}
-          </div>
-          <div className="text-[4px] font-mono text-center text-neutral-400">
-            DIY UNDERGROUND
-          </div>
-        </div>
-      );
-
-    // 28. CYBERPUNK NEO-TOKYO
-    case 'cyber_digest':
-      return (
-        <div className={`w-full aspect-[9/14] bg-[#020617] p-1 rounded border border-cyan-500/40 flex flex-col justify-between overflow-hidden shadow ${className}`}>
-          <div className="flex justify-between items-center text-[5px] font-mono text-cyan-400 font-bold border-b border-cyan-500/30 pb-0.5">
-            <span>NEO CHRONICLE</span>
-            <span>2077</span>
-          </div>
-          <div className="flex flex-col gap-1 my-1">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="aspect-[4/3] bg-neutral-900 border border-cyan-500/40 rounded-xs flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/40" />
-              </div>
-            ))}
-          </div>
-          <div className="text-[4px] font-mono text-cyan-500 text-center">
-            SYS.VER.2077 // ARCHIVE
-          </div>
-        </div>
-      );
-
-    // 29. NEON VIOLET K-POP
-    case 'cyber_studio':
-      return (
-        <div className={`w-full aspect-[9/14] bg-[#2e1065] p-1 rounded-lg border border-purple-500/50 flex flex-col justify-between overflow-hidden shadow ${className}`}>
-          <div className="text-center font-mono text-[6px] text-purple-300 font-bold">
-            NEON ROOM // 04
-          </div>
-          <div className="flex flex-col gap-1 my-1">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="aspect-[4/3] bg-neutral-900 border border-purple-500/40 rounded flex items-center justify-center shadow-[0_0_6px_rgba(168,85,247,0.3)]">
-                <div className="w-1.5 h-1.5 rounded-full bg-purple-300/40" />
-              </div>
-            ))}
-          </div>
-          <div className="text-[4.5px] font-mono text-purple-300 text-center">
-            GANGNAM STUDIO
-          </div>
-        </div>
-      );
-
-    // 30. RETRO 8-BIT GAMEBOY
-    case 'gameboy_pixel':
     default:
       return (
-        <div className={`w-full aspect-[9/14] bg-[#4d7c0f] p-1 rounded flex flex-col justify-between overflow-hidden shadow ${className}`}>
-          <div className="bg-[#84cc16] p-1 rounded h-full flex flex-col justify-between text-[#1a2e05] font-mono">
-            <div className="text-center font-bold text-[6px]">
-              PHOTO QUEST 89
+        <div
+          className={`w-full aspect-[9/14] p-1 rounded-sm flex flex-col justify-between overflow-hidden shadow ${className}`}
+          style={{ backgroundColor: template?.defaultBg || '#18181b' }}
+        >
+          <div
+            className="p-1 rounded-xs h-full flex flex-col justify-between"
+            style={{
+              backgroundColor: template?.cardBg || '#ffffff',
+              color: template?.textColor || '#18181b'
+            }}
+          >
+            <div className="text-center font-serif font-bold text-[5px] truncate border-b border-current/20 pb-0.5">
+              {template?.tag || 'STUDIO'}
             </div>
-            <div className="flex flex-col gap-1 my-1">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="aspect-[4/3] bg-[#1a2e05] rounded-xs flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#84cc16]" />
+            <div className="flex flex-col gap-0.5 my-0.5">
+              {[...Array(template?.slots || 4)].map((_, i) => (
+                <div key={i} className="aspect-[16/9] bg-neutral-900 rounded-2xs flex items-center justify-center">
+                  <div className="w-1 h-1 rounded-full bg-white/30" />
                 </div>
               ))}
             </div>
-            <div className="text-[4.5px] font-bold text-center">
-              PLAYER 1 READY!
+            <div className="text-[4px] font-mono text-center opacity-75 truncate">
+              PHOTOBOOTH
             </div>
           </div>
         </div>

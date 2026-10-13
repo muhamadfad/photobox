@@ -5,11 +5,12 @@ import TemplateThumbnail from './TemplateThumbnail';
 
 const SIMPLE_CATEGORIES = [
   { id: 'all', name: 'Semua' },
-  { id: 'studio_viral', name: 'Studio Hits' },
-  { id: 'ticket', name: 'Tiket & Koran' },
-  { id: 'retro', name: 'Musik & Retro' },
-  { id: 'kpop', name: 'Korean 4-Cut' },
-  { id: 'minimal', name: 'Klasik' }
+  { id: 'viral_momenku', name: 'Viral Hits' },
+  { id: 'pinterest_popular', name: 'Pinterest' },
+  { id: 'korean_booth', name: 'Korean 4-Cut' },
+  { id: 'ticket_travel', name: 'Tiket & Pass' },
+  { id: 'newspaper_editorial', name: 'Koran & Majalah' },
+  { id: 'postal_scrapbook', name: 'Polaroid & Struk' }
 ];
 
 const COLOR_PALETTES = [
@@ -35,9 +36,6 @@ export default function TemplateSelector({
 
   const filteredTemplates = TEMPLATES_LIST.filter((tmpl) => {
     if (selectedCategory === 'all') return true;
-    if (selectedCategory === 'ticket') {
-      return tmpl.category === 'ticket' || tmpl.category === 'editorial';
-    }
     return tmpl.category === selectedCategory;
   });
 
@@ -87,7 +85,7 @@ export default function TemplateSelector({
               )}
 
               <div className="w-full flex justify-center py-1">
-                <TemplateThumbnail template={tmpl} />
+                <TemplateThumbnail templateId={tmpl.id} template={tmpl} />
               </div>
 
               <span
