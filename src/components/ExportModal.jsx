@@ -56,35 +56,75 @@ export default function ExportModal({
 
       const originalNode = targetRef.current;
       const parentNode = originalNode.parentElement;
+      const prevParentTransition = parentNode ? parentNode.style.transition : '';
       const prevParentTransform = parentNode ? parentNode.style.transform : '';
       const prevParentMargin = parentNode ? parentNode.style.margin : '';
+      const prevOriginalWidth = originalNode.style.width;
+      const prevOriginalMinWidth = originalNode.style.minWidth;
+      const prevOriginalFlexShrink = originalNode.style.flexShrink;
 
       const hoverPrompts = Array.from(originalNode.querySelectorAll('[data-hover-prompt]'));
       const photoOverlays = Array.from(originalNode.querySelectorAll('[data-photo-overlay]'));
       const savedImgSrcs = [];
+      const savedSlotStyles = [];
+
+      const restoreDomState = () => {
+        savedImgSrcs.forEach(({ imgEl, src }) => {
+          imgEl.src = src;
+        });
+        savedSlotStyles.forEach(({ el, width, height }) => {
+          el.style.width = width;
+          el.style.height = height;
+        });
+        photoOverlays.forEach((el) => {
+          el.style.display = '';
+        });
+        hoverPrompts.forEach((el) => {
+          el.style.display = '';
+        });
+        originalNode.style.width = prevOriginalWidth;
+        originalNode.style.minWidth = prevOriginalMinWidth;
+        originalNode.style.flexShrink = prevOriginalFlexShrink;
+        if (parentNode) {
+          parentNode.style.transform = prevParentTransform;
+          parentNode.style.margin = prevParentMargin;
+          // Restore transition on next frame so it doesn't animate back visibly
+          requestAnimationFrame(() => {
+            if (parentNode) parentNode.style.transition = prevParentTransition;
+          });
+        }
+      };
 
       try {
         setIsGenerating(true);
 
-        // 1. Temporarily unscale mobile wrapper so layout is 1:1 true pixel coordinates
+        // 1. Disable CSS transition FIRST, then unscale mobile wrapper & lock max-content width
+        // so layout snaps to 1:1 in 0ms without 200ms transition lag or mobile flexbox squishing!
         if (parentNode) {
+          parentNode.style.transition = 'none';
           parentNode.style.transform = 'none';
           parentNode.style.margin = '0';
         }
+        originalNode.style.flexShrink = '0';
+        originalNode.style.minWidth = 'max-content';
+        originalNode.style.width = 'max-content';
 
         // Hide interactive hover prompts during capture
         hoverPrompts.forEach((el) => {
           el.style.display = 'none';
         });
 
-        // Wait one frame for browser layout to settle at 1:1 scale
+        // Force synchronous browser layout reflow + wait two frames for mobile Safari/Chrome
+        void originalNode.offsetHeight;
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
         const rootRect = originalNode.getBoundingClientRect();
-        const rootWidth = Math.round(rootRect.width) || originalNode.offsetWidth || 580;
-        const rootHeight = Math.round(rootRect.height) || originalNode.offsetHeight || 760;
+        const rootWidth = Math.round(originalNode.offsetWidth || rootRect.width || 580);
+        const rootHeight = Math.round(originalNode.offsetHeight || rootRect.height || 760);
+        const scaleX = rootRect.width > 0 ? rootRect.width / rootWidth : 1;
+        const scaleY = rootRect.height > 0 ? rootRect.height / rootHeight : 1;
 
-        // 2. Measure every photo slot & preload its HTMLImageElement for direct Canvas 2D blitting
+        // 2. Measure every photo slot at true 1:1 coordinates & preload its HTMLImageElement
         const slotNodes = Array.from(originalNode.querySelectorAll('[data-photo-slot]'));
         const slotsData = await Promise.all(
           slotNodes.map(async (slotEl) => {
@@ -93,6 +133,23 @@ export default function ExportModal({
             const cs = window.getComputedStyle(slotEl);
             const radius = parseFloat(cs.borderRadius) || 2;
             const src = imgEl ? imgEl.getAttribute('src') || imgEl.src : null;
+
+            const exactX = (rect.left - rootRect.left) / scaleX;
+            const exactY = (rect.top - rootRect.top) / scaleY;
+            const exactW = rect.width / scaleX;
+            const exactH = rect.height / scaleY;
+
+            // Lock explicit pixel width & height on the outer aspect-[4/3] wrapper so mobile WebKit SVG foreignObject never collapses it
+            const wrapperEl = slotEl.parentElement;
+            if (wrapperEl && exactW > 0 && exactH > 0) {
+              savedSlotStyles.push({
+                el: wrapperEl,
+                width: wrapperEl.style.width,
+                height: wrapperEl.style.height
+              });
+              wrapperEl.style.width = `${ wrapperEl.offsetWidth || Math.round(exactW) }px`;
+              wrapperEl.style.height = `${ wrapperEl.offsetHeight || Math.round(exactH) }px`;
+            }
 
             let loadedImg = null;
             if (src && src !== TINY_TRANSPARENT_GIF) {
@@ -116,25 +173,25 @@ export default function ExportModal({
               imgEl,
               originalSrc: src,
               loadedImg,
-              x: rect.left - rootRect.left,
-              y: rect.top - rootRect.top,
-              width: rect.width,
-              height: rect.height,
+              x: exactX,
+              y: exactY,
+              width: exactW,
+              height: exactH,
               radius
             };
           })
         );
 
-        // Measure floating badges / placed stickers so they can be layered above photos
+        // Measure floating badges / placed stickers at true 1:1 coordinates
         const floatingNodes = Array.from(originalNode.querySelectorAll('[data-floating-overlay]'));
         const floatingData = floatingNodes.map((el) => {
           const rect = el.getBoundingClientRect();
           return {
             el,
-            x: rect.left - rootRect.left,
-            y: rect.top - rootRect.top,
-            width: rect.width,
-            height: rect.height
+            x: (rect.left - rootRect.left) / scaleX,
+            y: (rect.top - rootRect.top) / scaleY,
+            width: rect.width / scaleX,
+            height: rect.height / scaleY
           };
         });
 
@@ -165,7 +222,13 @@ export default function ExportModal({
             cacheBust: false,
             style: {
               transform: 'none',
+              transition: 'none',
               margin: '0',
+              width: `${rootWidth}px`,
+              height: `${rootHeight}px`,
+              minWidth: `${rootWidth}px`,
+              maxWidth: `${rootWidth}px`,
+              flexShrink: '0',
               position: 'relative',
               top: '0px',
               left: '0px'
@@ -180,15 +243,7 @@ export default function ExportModal({
           fbCtx.fillRect(0, 0, canvas.width, canvas.height);
         }
 
-        // Restore DOM immediately after template capture
-        savedImgSrcs.forEach(({ imgEl, src }) => {
-          imgEl.src = src;
-        });
-        photoOverlays.forEach((el) => {
-          el.style.display = '';
-        });
-
-        // 4. Direct HTML5 Canvas 2D Photo Compositing: paint every photo directly onto canvas
+        // 4. Direct HTML5 Canvas 2D Photo Compositing: paint every photo at exact 1:1 slot coordinates
         const ctx = canvas.getContext('2d');
         for (const slot of slotsData) {
           if (slot.loadedImg && slot.width > 0 && slot.height > 0) {
@@ -236,14 +291,8 @@ export default function ExportModal({
           }
         }
 
-        // Restore mobile wrapper scale and hover prompts
-        if (parentNode) {
-          parentNode.style.transform = prevParentTransform;
-          parentNode.style.margin = prevParentMargin;
-        }
-        hoverPrompts.forEach((el) => {
-          el.style.display = '';
-        });
+        // Restore DOM state immediately after capture
+        restoreDomState();
 
         if (cancelled) return;
 
@@ -276,19 +325,7 @@ export default function ExportModal({
         setIsGenerating(false);
       } catch (err) {
         console.error('Export error:', err);
-        savedImgSrcs.forEach(({ imgEl, src }) => {
-          imgEl.src = src;
-        });
-        photoOverlays.forEach((el) => {
-          el.style.display = '';
-        });
-        hoverPrompts.forEach((el) => {
-          el.style.display = '';
-        });
-        if (parentNode) {
-          parentNode.style.transform = prevParentTransform;
-          parentNode.style.margin = prevParentMargin;
-        }
+        restoreDomState();
         if (!cancelled) {
           setIsGenerating(false);
         }

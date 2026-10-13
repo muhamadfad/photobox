@@ -257,18 +257,18 @@ export default function App() {
 
             <div className={`w-full flex justify-center items-center ${mobileZoom ? 'overflow-x-auto py-2' : ''}`}>
               <div
-                className="transition-transform duration-200 origin-top flex justify-center items-center"
+                className="shrink-0 min-w-max transition-transform duration-200 origin-top flex justify-center items-center"
                 style={{
                   transform:
                     !mobileZoom && typeof window !== 'undefined' && window.innerWidth < 640
                       ? isTwin
-                        ? 'scale(0.66)'
-                        : 'scale(0.95)'
+                        ? 'scale(0.62)'
+                        : 'scale(0.92)'
                       : 'none',
                   margin:
                     !mobileZoom && typeof window !== 'undefined' && window.innerWidth < 640
                       ? isTwin
-                        ? '-65px 0'
+                        ? '-85px 0'
                         : '0'
                       : '0'
                 }}
@@ -276,7 +276,7 @@ export default function App() {
                 <div
                   ref={printAreaRef}
                   id="photobooth-print-area"
-                  className="p-3 sm:p-5 rounded-2xl bg-white/40 inline-flex justify-center items-center"
+                  className="shrink-0 min-w-max p-3 sm:p-5 rounded-2xl bg-white/40 inline-flex justify-center items-center"
                 >
                   <PhotoboothCanvas
                     template={activeTemplate}
