@@ -389,12 +389,12 @@ export default function CameraBooth({
   const userContrast = filterSettings?.contrast || 0;
   const userSaturation = filterSettings?.saturation || 0;
   const totalBrightness = 1 + (userBrightness + (sceneInfo.boostNeeded ?? 0)) / 100;
-  const totalContrast = 1 + userContrast / 100;
-  const totalSaturation = 1 + userSaturation / 100;
+  const totalContrast = 1 + (userContrast + (sceneInfo.contrastBoost ?? 0)) / 100;
+  const totalSaturation = 1 + (userSaturation + (sceneInfo.saturationBoost ?? 0)) / 100;
 
   const liveVideoFilter = isIOSWebKit
-    ? `brightness(${Math.max(0.85, Math.min(1.4, totalBrightness)).toFixed(2)}) contrast(${Math.max(0.9, Math.min(1.25, totalContrast)).toFixed(2)}) saturate(${Math.max(0, Math.min(1.35, totalSaturation)).toFixed(2)})`
-    : `url(#pikubooth-live-isp) brightness(${(1 + userBrightness / 100).toFixed(2)}) contrast(${Math.max(0.9, Math.min(1.25, totalContrast)).toFixed(2)}) saturate(${Math.max(0, Math.min(1.35, totalSaturation)).toFixed(2)})`;
+    ? `brightness(${Math.max(0.85, Math.min(1.4, totalBrightness)).toFixed(2)}) contrast(${Math.max(0.9, Math.min(1.35, totalContrast)).toFixed(2)}) saturate(${Math.max(0, Math.min(1.45, totalSaturation)).toFixed(2)})`
+    : `url(#pikubooth-live-isp) brightness(${(1 + userBrightness / 100).toFixed(2)}) contrast(${Math.max(0.9, Math.min(1.38, totalContrast)).toFixed(2)}) saturate(${Math.max(0, Math.min(1.48, totalSaturation)).toFixed(2)})`;
 
   return (
     <div

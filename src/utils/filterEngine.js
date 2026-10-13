@@ -185,49 +185,54 @@ export const DEFAULT_FILTER_SETTINGS = {
 
 const DEFAULT_TABLE = '0 0.063 0.125 0.188 0.25 0.313 0.375 0.438 0.5 0.563 0.625 0.688 0.75 0.813 0.875 0.938 1';
 
-// Pure, Color-Neutral Gentle Exposure Curve:
-// Never crushes blacks, never distorts colors, never over-processes good cameras (like iPhone).
-// Only gently lifts midtones/shadows if the face is genuinely dark/backlit, or gently softens highlights if overexposed.
-function evalGentleExposureCurve(v, gamma, shadowFill, highlightCompress) {
-  const t = Math.min(1, Math.max(0, v / 255));
+// Closed-Form Naka-Rushton Photoreceptor HDR & Optical Dehaze Curve:
+// - When blackCut > 0 (foggy laptop webcam with ceiling glare like p04 = 80):
+//   Strips away the milky veil, anchors hair/eyebrows at rich dark tones (p = 1.58 toe),
+//   and expands face skin midtones up to bright studio luminance (0.62) while rolling off ceiling glare.
+// - When blackCut == 0 (good camera like iPhone where p04 < 32):
+//   Preserves 100% of true blacks and natural colors, gently lifting shadowed faces only when needed.
+function evalNakaRushtonHdrCurve(v, blackCut, whitePoint, targetMid, pToe, mHalf) {
+  const denom = Math.max(40, whitePoint - blackCut);
+  const t = Math.min(1, Math.max(0, (v - blackCut) / denom));
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
 
-  // Gentle shadow fill only on mid-shadows (keeps true blacks at 0 and highlights untouched)
-  const lifted = Math.min(1, t + shadowFill * t * (1 - t) * (1 - t) * 2.2);
-  let out = Math.pow(lifted, gamma);
-
-  // If background ceiling is bright while lifting face, gently hold back top highlights (> 0.75) so ceiling never blows out
-  if (highlightCompress > 0 && t > 0.72) {
-    const blend = ((t - 0.72) / 0.28) * highlightCompress;
-    out = out * (1 - blend) + t * blend;
-  }
-
-  return Math.min(1, Math.max(0, out));
+  const tp = Math.pow(t, pToe);
+  const mp = Math.pow(mHalf, pToe);
+  const norm = (tp / (tp + mp)) * (1 + mp);
+  return Math.min(1, Math.max(0, norm));
 }
 
-function buildGentleSvgTable(gamma, shadowFill, highlightCompress) {
+function buildNakaRushtonSvgTable(blackCut, whitePoint, targetMid, pToe, mHalf, channelGain = 1.0) {
   const pts = [];
   for (let i = 0; i <= 16; i++) {
     const v = (i / 16) * 255;
-    const out = evalGentleExposureCurve(v, gamma, shadowFill, highlightCompress);
+    let out = evalNakaRushtonHdrCurve(v, blackCut, whitePoint, targetMid, pToe, mHalf);
+    out = Math.min(1, Math.max(0, out * channelGain));
     pts.push(out.toFixed(3));
   }
   return pts.join(' ');
 }
 
 let analyzerCanvas = null;
-let smoothedFaceLum = null;
+let smoothedState = null;
 
-export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }, manualAdjust = { exposure: 0, autoLight: true }) {
+export function analyzeVideoScene(
+  videoEl,
+  focusPoint = { x: 0.5, y: 0.5 },
+  manualAdjust = { exposure: 0, dehaze: 0, autoLight: true }
+) {
   if (!videoEl || !videoEl.videoWidth || !videoEl.videoHeight) {
     return {
       luminance: 58,
       status: 'OPTIMAL',
-      label: 'AF • Kualitas Kamera Asli HD',
+      label: 'AF • Kamera Natural HD',
       boostNeeded: 0,
       contrastBoost: 0,
       saturationBoost: 0,
       gamma: 1.0,
       dehazeFloor: 0,
+      isFoggyWebcam: false,
       tableR: DEFAULT_TABLE,
       tableG: DEFAULT_TABLE,
       tableB: DEFAULT_TABLE
@@ -252,6 +257,12 @@ export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }, manu
     let midFocusLum = 0;
     let midFocusCount = 0;
     let brightPixels = 0;
+    let sumR = 0;
+    let sumG = 0;
+    let sumB = 0;
+    let colorSamples = 0;
+
+    const hist = new Uint16Array(256);
     const pixelCount = data.length / 4;
 
     const fx = Math.round((focusPoint?.x ?? 0.5) * sw);
@@ -264,8 +275,16 @@ export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }, manu
       const g = data[i + 1];
       const b = data[i + 2];
       const lum = Math.min(255, Math.max(0, Math.round(0.299 * r + 0.587 * g + 0.114 * b)));
+      hist[lum]++;
       totalLum += lum;
       if (lum > 190) brightPixels++;
+
+      if (lum > 35 && lum < 205) {
+        sumR += r;
+        sumG += g;
+        sumB += b;
+        colorSamples++;
+      }
 
       const pxIndex = i / 4;
       const x = pxIndex % sw;
@@ -273,78 +292,158 @@ export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }, manu
       if (Math.abs(x - fx) <= boxRx && Math.abs(y - fy) <= boxRy) {
         focusLum += lum;
         focusCount++;
-        // Ignore bright ceiling lights (>180) and deep black hair (<25) when measuring face brightness
-        if (lum >= 25 && lum <= 180) {
+        // Ignore bright ceiling lights (>182) and deep black hair (<25) when measuring face brightness
+        if (lum >= 25 && lum <= 182) {
           midFocusLum += lum;
           midFocusCount++;
         }
       }
     }
 
+    let acc = 0;
+    let p03 = 0;
+    let p12 = 0;
+    let p98 = 250;
+    let found03 = false;
+    let found12 = false;
+    const t03 = pixelCount * 0.03;
+    const t12 = pixelCount * 0.12;
+    const t98 = pixelCount * 0.98;
+
+    for (let v = 0; v < 256; v++) {
+      acc += hist[v];
+      if (!found03 && acc >= t03) {
+        p03 = v;
+        found03 = true;
+      }
+      if (!found12 && acc >= t12) {
+        p12 = v;
+        found12 = true;
+      }
+      if (acc >= t98) {
+        p98 = v;
+        break;
+      }
+    }
+
     const avgLum = totalLum / pixelCount;
     const rawFocusLum = focusCount > 0 ? focusLum / focusCount : avgLum;
     const detectedFaceLum =
-      focusCount > 0 && midFocusCount >= focusCount * 0.16
+      focusCount > 0 && midFocusCount >= focusCount * 0.15
         ? midFocusLum / midFocusCount
         : rawFocusLum;
 
-    if (smoothedFaceLum === null) {
-      smoothedFaceLum = detectedFaceLum;
+    if (!smoothedState) {
+      smoothedState = { p03, p12, p98, faceLum: detectedFaceLum };
     } else {
-      smoothedFaceLum = smoothedFaceLum * 0.65 + detectedFaceLum * 0.35;
+      smoothedState.p03 = smoothedState.p03 * 0.6 + p03 * 0.4;
+      smoothedState.p12 = smoothedState.p12 * 0.6 + p12 * 0.4;
+      smoothedState.p98 = smoothedState.p98 * 0.6 + p98 * 0.4;
+      smoothedState.faceLum = smoothedState.faceLum * 0.55 + detectedFaceLum * 0.45;
     }
 
-    const sFaceLum = smoothedFaceLum;
-    const highlightRatio = brightPixels / pixelCount;
-    const hasBacklight = highlightRatio > 0.15 && sFaceLum < 128;
+    const sp03 = smoothedState.p03;
+    const sp12 = smoothedState.p12;
+    const sp98 = smoothedState.p98;
+    const sFaceLum = smoothedState.faceLum;
+
     const autoEnabled = manualAdjust?.autoLight !== false;
     const userExp = manualAdjust?.exposure || 0; // -25 .. +25
+    const userDehaze = manualAdjust?.dehaze || 0; // 0 .. 30
 
-    // Calculate gentle, non-destructive exposure parameters
-    let gamma = 1.0;
-    let shadowFill = 0;
-    let highlightCompress = 0;
-
-    if (autoEnabled) {
-      if (sFaceLum < 122) {
-        // Face is somewhat dark or backlit: gently lift shadows/midtones without washing out or changing colors
-        const darkness = (122 - sFaceLum) / 122; // 0 .. ~0.7
-        gamma = Math.max(0.76, 1.0 - darkness * 0.34);
-        shadowFill = Math.min(0.18, darkness * 0.24);
-        if (hasBacklight) {
-          highlightCompress = 0.45;
-        }
-      } else if (sFaceLum > 168) {
-        // Face is genuinely too bright/overexposed: gently tone down highlights
-        const excess = (sFaceLum - 168) / 87;
-        gamma = Math.min(1.18, 1.0 + excess * 0.24);
-      }
+    if (!autoEnabled && userExp === 0 && userDehaze === 0) {
+      return {
+        luminance: Math.round((sFaceLum / 255) * 100),
+        status: 'OPTIMAL',
+        label: 'AF • Mode Asli Kamera',
+        boostNeeded: 0,
+        contrastBoost: 0,
+        saturationBoost: 0,
+        gamma: 1.0,
+        dehazeFloor: 0,
+        isFoggyWebcam: false,
+        tableR: DEFAULT_TABLE,
+        tableG: DEFAULT_TABLE,
+        tableB: DEFAULT_TABLE
+      };
     }
 
-    // Apply user's manual Cahaya slider smoothly on top
-    if (userExp !== 0) {
-      gamma = Math.min(1.35, Math.max(0.65, gamma - (userExp / 25) * 0.22));
-      if (userExp > 0) {
-        shadowFill = Math.min(0.24, shadowFill + (userExp / 25) * 0.1);
-      }
+    // Detect whether the camera is suffering from Laptop Webcam Optical Glare/Fog (sp03 > 32)
+    // vs a clean Smartphone/iPhone camera with true blacks (sp03 <= 32)
+    const isFoggyWebcam = sp03 > 32 || userDehaze > 0;
+
+    // 1. Optical Glare Floor (blackCut):
+    // - On iPhone (sp03 ~ 10..25): autoBlackCut = 0 (never crushes shadows!)
+    // - On Laptop Webcam with ceiling glare (sp03 ~ 75..90): strips away the milky veil!
+    const autoBlackCut =
+      autoEnabled && sp03 > 32
+        ? Math.max(0, (sp03 - 14) * 0.85 + Math.max(0, sp12 - sp03) * 0.25)
+        : 0;
+    const blackCut = Math.min(115, Math.max(0, autoBlackCut + userDehaze * 1.1));
+    const whitePoint = Math.max(blackCut + 85, Math.min(254, sp98 * 0.985));
+    const denom = Math.max(50, whitePoint - blackCut);
+
+    // 2. Closed-Form Naka-Rushton Parameters:
+    // Calculate where the user's face sits after subtracting the glare floor
+    const faceT = Math.min(0.82, Math.max(0.14, (sFaceLum - blackCut) / denom));
+    const userExpOffset = (userExp / 25) * 0.16;
+
+    // Target studio face luminance: ~0.60 on foggy webcams, or gentle nudge on clean cameras
+    const rawTargetMid = isFoggyWebcam
+      ? 0.60 + userExpOffset
+      : Math.min(0.66, Math.max(0.48, faceT * 0.55 + 0.60 * 0.45 + userExpOffset));
+    const targetMid = Math.min(0.78, Math.max(0.38, rawTargetMid));
+
+    // Toe contrast exponent pToe:
+    // On foggy webcams (blackCut > 20), pToe = 1.52..1.65 anchors hair/eyebrows dark while expanding skin midtones!
+    // On clean iPhone cameras (blackCut == 0), pToe = 1.08 keeps gentle natural gradation.
+    const fogRatio = Math.min(1, blackCut / 75);
+    const pToe = 1.06 + fogRatio * 0.56;
+
+    // Exact analytical half-saturation point mHalf so f(faceT) == targetMid
+    const mHalf = Math.min(
+      0.75,
+      Math.max(0.10, faceT * Math.pow((1 - targetMid) / Math.max(0.08, targetMid), 1 / pToe))
+    );
+
+    // 3. Auto White Balance & Saturation Recovery (only active proportionally to webcam fog!)
+    let gainR = 1.0 + fogRatio * 0.04;
+    let gainG = 1.0;
+    let gainB = 1.0 - fogRatio * 0.03;
+    if (isFoggyWebcam && colorSamples > 40) {
+      const avgR = sumR / colorSamples;
+      const avgG = sumG / colorSamples;
+      const avgB = sumB / colorSamples;
+      const gray = (avgR + avgG + avgB) / 3;
+      const wbR = Math.min(1.08, Math.max(0.96, (gray / Math.max(1, avgR)) * 1.04));
+      const wbG = Math.min(1.02, Math.max(0.95, (gray / Math.max(1, avgG)) * 0.99));
+      const wbB = Math.min(1.04, Math.max(0.92, (gray / Math.max(1, avgB)) * 0.97));
+      gainR = 1.0 * (1 - fogRatio) + wbR * fogRatio;
+      gainG = 1.0 * (1 - fogRatio) + wbG * fogRatio;
+      gainB = 1.0 * (1 - fogRatio) + wbB * fogRatio;
     }
 
-    const tableStr = buildGentleSvgTable(gamma, shadowFill, highlightCompress);
-    const sampleOut = evalGentleExposureCurve(sFaceLum, gamma, shadowFill, highlightCompress) * 255;
-    const boostNeeded = Math.min(28, Math.max(-15, Math.round(((sampleOut - sFaceLum) / 255) * 100)));
+    const tableR = buildNakaRushtonSvgTable(blackCut, whitePoint, targetMid, pToe, mHalf, gainR);
+    const tableG = buildNakaRushtonSvgTable(blackCut, whitePoint, targetMid, pToe, mHalf, gainG);
+    const tableB = buildNakaRushtonSvgTable(blackCut, whitePoint, targetMid, pToe, mHalf, gainB);
+
+    const sampleOut = evalNakaRushtonHdrCurve(sFaceLum, blackCut, whitePoint, targetMid, pToe, mHalf) * 255;
+    const boostNeeded = Math.min(32, Math.max(-16, Math.round(((sampleOut - sFaceLum) / 255) * 100)));
+
+    // Restore color saturation that was diluted by the webcam's white glare veil
+    const saturationBoost = Math.round(fogRatio * 34);
+    const contrastBoost = Math.round(fogRatio * 10);
     const lumPct = Math.round((sFaceLum / 255) * 100);
 
     let status = 'OPTIMAL';
     let label = 'AF • Kamera Natural HD';
-    if (!autoEnabled) {
-      label = 'AF • Mode Asli Kamera (Tanpa Auto)';
-    } else if (hasBacklight) {
-      status = 'LOW_LIGHT';
-      label = 'AF • Penyeimbang Backlight Lembut';
+    if (blackCut > 22) {
+      status = 'BRIGHT';
+      label = 'AF • Anti-Kabut & Penjernih Webcam Aktif';
     } else if (sFaceLum < 105) {
       status = 'LOW_LIGHT';
       label = 'AF • Pencerah Cahaya Natural';
-    } else if (sFaceLum > 170) {
+    } else if (sFaceLum > 172) {
       status = 'BRIGHT';
       label = 'AF • Peredam Silau Natural';
     }
@@ -354,13 +453,14 @@ export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }, manu
       status,
       label,
       boostNeeded,
-      contrastBoost: 0,
-      saturationBoost: 0,
-      gamma: Number(gamma.toFixed(2)),
-      dehazeFloor: 0,
-      tableR: tableStr,
-      tableG: tableStr,
-      tableB: tableStr
+      contrastBoost,
+      saturationBoost,
+      gamma: Number(mHalf.toFixed(2)),
+      dehazeFloor: Number((blackCut / 255).toFixed(3)),
+      isFoggyWebcam,
+      tableR,
+      tableG,
+      tableB
     };
   } catch (e) {
     return {
@@ -372,6 +472,7 @@ export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }, manu
       saturationBoost: 0,
       gamma: 1.0,
       dehazeFloor: 0,
+      isFoggyWebcam: false,
       tableR: DEFAULT_TABLE,
       tableG: DEFAULT_TABLE,
       tableB: DEFAULT_TABLE
@@ -379,25 +480,44 @@ export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }, manu
   }
 }
 
-// Non-Destructive, Color-True Exposure Adaptation for Captured Photos
-// Preserves 100% of native iPhone/Smartphone sharpness and skin tones without gritty sharpening or color blotching.
+// Adaptive Dual-Path Computational ISP for Captured Photos:
+// - Path A (Clean Smartphone / iPhone Camera, p03 <= 32): Non-destructive, color-true gentle exposure.
+// - Path B (Foggy Laptop Webcam with Ceiling Glare, p03 > 32): 2D Spatial Glare Subtraction + Naka-Rushton HDR Dehaze + Color Recovery.
 export function processIntelligentCapture(ctx, width, height, options = {}) {
   if (!ctx || !width || !height) return;
   const {
     autoTone = true,
     focusPoint = { x: 0.5, y: 0.5 },
-    manualAdjust = { exposure: 0, autoLight: true }
+    manualAdjust = { exposure: 0, dehaze: 0, autoLight: true }
   } = options;
 
   const autoEnabled = autoTone && manualAdjust?.autoLight !== false;
   const userExp = manualAdjust?.exposure || 0;
+  const userDehaze = manualAdjust?.dehaze || 0;
 
-  if (!autoEnabled && userExp === 0) {
-    // 100% untouched native camera frame!
+  if (!autoEnabled && userExp === 0 && userDehaze === 0) {
     return;
   }
 
   try {
+    // First sample scene histogram & build a 32x24 2D spatial illumination map to detect & cancel uneven ceiling glare
+    const gridW = 32;
+    const gridH = 24;
+    const smallCanvas = document.createElement('canvas');
+    smallCanvas.width = gridW;
+    smallCanvas.height = gridH;
+    const smallCtx = smallCanvas.getContext('2d', { willReadFrequently: true });
+    try {
+      smallCtx.filter = 'blur(3px)';
+    } catch (e) {}
+    smallCtx.drawImage(ctx.canvas, 0, 0, gridW, gridH);
+    const smallData = smallCtx.getImageData(0, 0, gridW, gridH).data;
+    const illumGrid = new Float32Array(gridW * gridH);
+    for (let idx = 0; idx < gridW * gridH; idx++) {
+      const si = idx * 4;
+      illumGrid[idx] = 0.299 * smallData[si] + 0.587 * smallData[si + 1] + 0.114 * smallData[si + 2];
+    }
+
     const imgData = ctx.getImageData(0, 0, width, height);
     const data = imgData.data;
 
@@ -406,21 +526,32 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
     let focusCount = 0;
     let midFocusLum = 0;
     let midFocusCount = 0;
-    let brightPixels = 0;
+    let sumR = 0;
+    let sumG = 0;
+    let sumB = 0;
+    let colorSamples = 0;
 
+    const hist = new Uint32Array(256);
     const fx = Math.round((focusPoint?.x ?? 0.5) * width);
     const fy = Math.round((focusPoint?.y ?? 0.52) * height);
     const rx = Math.round(width * 0.25);
     const ry = Math.round(height * 0.25);
 
-    const step = 4 * 12;
+    const step = 4 * 10;
     for (let i = 0; i < data.length; i += step) {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
       const lum = Math.min(255, Math.max(0, Math.round(0.299 * r + 0.587 * g + 0.114 * b)));
+      hist[lum]++;
       sumLum += lum;
-      if (lum > 190) brightPixels++;
+
+      if (lum > 35 && lum < 205) {
+        sumR += r;
+        sumG += g;
+        sumB += b;
+        colorSamples++;
+      }
 
       const pxIdx = i / 4;
       const x = pxIdx % width;
@@ -428,7 +559,7 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
       if (Math.abs(x - fx) <= rx && Math.abs(y - fy) <= ry) {
         focusLum += lum;
         focusCount++;
-        if (lum >= 25 && lum <= 180) {
+        if (lum >= 25 && lum <= 182) {
           midFocusLum += lum;
           midFocusCount++;
         }
@@ -436,56 +567,133 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
     }
 
     const totalSamples = Math.max(1, Math.floor(data.length / step));
+    let acc = 0;
+    let p03 = 0;
+    let p12 = 0;
+    let p98 = 250;
+    let found03 = false;
+    let found12 = false;
+    const t03 = totalSamples * 0.03;
+    const t12 = totalSamples * 0.12;
+    const t98 = totalSamples * 0.98;
+
+    for (let v = 0; v < 256; v++) {
+      acc += hist[v];
+      if (!found03 && acc >= t03) {
+        p03 = v;
+        found03 = true;
+      }
+      if (!found12 && acc >= t12) {
+        p12 = v;
+        found12 = true;
+      }
+      if (acc >= t98) {
+        p98 = v;
+        break;
+      }
+    }
+
     const avgLum = sumLum / totalSamples;
     const rawFocusLum = focusCount > 0 ? focusLum / focusCount : avgLum;
     const faceLum =
-      focusCount > 0 && midFocusCount >= focusCount * 0.16
+      focusCount > 0 && midFocusCount >= focusCount * 0.15
         ? midFocusLum / midFocusCount
         : rawFocusLum;
 
-    const highlightRatio = brightPixels / totalSamples;
-    const hasBacklight = highlightRatio > 0.15 && faceLum < 128;
+    const isFoggyWebcam = p03 > 32 || userDehaze > 0;
+    const autoBlackCut =
+      autoEnabled && p03 > 32
+        ? Math.max(0, (p03 - 14) * 0.85 + Math.max(0, p12 - p03) * 0.25)
+        : 0;
+    const blackCut = Math.min(115, Math.max(0, autoBlackCut + userDehaze * 1.1));
+    const whitePoint = Math.max(blackCut + 85, Math.min(254, p98 * 0.985));
+    const denom = Math.max(50, whitePoint - blackCut);
 
-    let gamma = 1.0;
-    let shadowFill = 0;
-    let highlightCompress = 0;
+    const faceT = Math.min(0.82, Math.max(0.14, (faceLum - blackCut) / denom));
+    const userExpOffset = (userExp / 25) * 0.16;
+    const rawTargetMid = isFoggyWebcam
+      ? 0.60 + userExpOffset
+      : Math.min(0.66, Math.max(0.48, faceT * 0.55 + 0.60 * 0.45 + userExpOffset));
+    const targetMid = Math.min(0.78, Math.max(0.38, rawTargetMid));
 
-    if (autoEnabled) {
-      if (faceLum < 122) {
-        const darkness = (122 - faceLum) / 122;
-        gamma = Math.max(0.76, 1.0 - darkness * 0.34);
-        shadowFill = Math.min(0.18, darkness * 0.24);
-        if (hasBacklight) {
-          highlightCompress = 0.45;
-        }
-      } else if (faceLum > 168) {
-        const excess = (faceLum - 168) / 87;
-        gamma = Math.min(1.18, 1.0 + excess * 0.24);
-      }
-    }
+    const fogRatio = Math.min(1, blackCut / 75);
+    const pToe = 1.06 + fogRatio * 0.56;
+    const mHalf = Math.min(
+      0.75,
+      Math.max(0.10, faceT * Math.pow((1 - targetMid) / Math.max(0.08, targetMid), 1 / pToe))
+    );
 
-    if (userExp !== 0) {
-      gamma = Math.min(1.35, Math.max(0.65, gamma - (userExp / 25) * 0.22));
-      if (userExp > 0) {
-        shadowFill = Math.min(0.24, shadowFill + (userExp / 25) * 0.1);
-      }
-    }
-
-    // If exposure needs virtually zero change (camera is already well-lit), keep 100% pure native pixels!
-    if (Math.abs(gamma - 1.0) < 0.025 && shadowFill < 0.015) {
+    // If clean camera (blackCut == 0) and exposure is already balanced, keep 100% pure native pixels!
+    if (blackCut < 2 && Math.abs(targetMid - faceT) < 0.03 && userExp === 0) {
       return;
     }
 
-    const lut = new Uint8ClampedArray(256);
-    for (let v = 0; v < 256; v++) {
-      lut[v] = Math.round(evalGentleExposureCurve(v, gamma, shadowFill, highlightCompress) * 255);
+    let gainR = 1.0 + fogRatio * 0.04;
+    let gainG = 1.0;
+    let gainB = 1.0 - fogRatio * 0.03;
+    if (isFoggyWebcam && colorSamples > 50) {
+      const avgR = sumR / colorSamples;
+      const avgG = sumG / colorSamples;
+      const avgB = sumB / colorSamples;
+      const gray = (avgR + avgG + avgB) / 3;
+      const wbR = Math.min(1.08, Math.max(0.96, (gray / Math.max(1, avgR)) * 1.04));
+      const wbG = Math.min(1.02, Math.max(0.95, (gray / Math.max(1, avgG)) * 0.99));
+      const wbB = Math.min(1.04, Math.max(0.92, (gray / Math.max(1, avgB)) * 0.97));
+      gainR = 1.0 * (1 - fogRatio) + wbR * fogRatio;
+      gainG = 1.0 * (1 - fogRatio) + wbG * fogRatio;
+      gainB = 1.0 * (1 - fogRatio) + wbB * fogRatio;
     }
 
-    // Apply pure, identical RGB lookup table so there is ZERO hue/color/saturation shift!
-    for (let i = 0; i < data.length; i += 4) {
-      data[i] = lut[data[i]];
-      data[i + 1] = lut[data[i + 1]];
-      data[i + 2] = lut[data[i + 2]];
+    const lutR = new Uint8ClampedArray(256);
+    const lutG = new Uint8ClampedArray(256);
+    const lutB = new Uint8ClampedArray(256);
+    for (let v = 0; v < 256; v++) {
+      const norm = evalNakaRushtonHdrCurve(v, blackCut, whitePoint, targetMid, pToe, mHalf) * 255;
+      lutR[v] = Math.min(255, Math.max(0, Math.round(norm * gainR)));
+      lutG[v] = Math.min(255, Math.max(0, Math.round(norm * gainG)));
+      lutB[v] = Math.min(255, Math.max(0, Math.round(norm * gainB)));
+    }
+
+    // Proportional saturation recovery only for foggy webcams (1.0 on iPhone -> up to 1.36 on heavy webcam fog)
+    const satFactor = 1.0 + fogRatio * 0.36;
+    const spatialGlareStrength = fogRatio * 0.24;
+
+    for (let y = 0; y < height; y++) {
+      const gy = Math.min(gridH - 1, Math.floor((y / height) * gridH));
+      const rowOffset = y * width * 4;
+      for (let x = 0; x < width; x++) {
+        const i = rowOffset + x * 4;
+        let r = data[i];
+        let g = data[i + 1];
+        let b = data[i + 2];
+
+        // 2D Spatial Ceiling Glare Subtraction (removes uneven overhead light haze bleeding across hair/forehead)
+        if (spatialGlareStrength > 0.02) {
+          const gx = Math.min(gridW - 1, Math.floor((x / width) * gridW));
+          const localIllum = illumGrid[gy * gridW + gx];
+          if (localIllum > faceLum + 8 && r < 238 && g < 238 && b < 238) {
+            const excessGlare = (localIllum - faceLum) * spatialGlareStrength;
+            r = Math.max(0, Math.round(r - excessGlare));
+            g = Math.max(0, Math.round(g - excessGlare));
+            b = Math.max(0, Math.round(b - excessGlare));
+          }
+        }
+
+        const nr = lutR[r];
+        const ng = lutG[g];
+        const nb = lutB[b];
+
+        if (satFactor > 1.01) {
+          const luma = 0.299 * nr + 0.587 * ng + 0.114 * nb;
+          data[i] = Math.min(255, Math.max(0, Math.round(luma + (nr - luma) * satFactor)));
+          data[i + 1] = Math.min(255, Math.max(0, Math.round(luma + (ng - luma) * satFactor)));
+          data[i + 2] = Math.min(255, Math.max(0, Math.round(luma + (nb - luma) * satFactor)));
+        } else {
+          data[i] = nr;
+          data[i + 1] = ng;
+          data[i + 2] = nb;
+        }
+      }
     }
 
     ctx.putImageData(imgData, 0, 0);
