@@ -12,11 +12,9 @@ import { TEMPLATES_LIST } from './data/templatesData';
 import { DEFAULT_FILTER_SETTINGS } from './utils/filterEngine';
 import { SAMPLE_PHOTOS } from './utils/samplePhotos';
 import {
-  Camera,
   Sparkles,
   Layers,
   Smile,
-  Download,
   RefreshCw,
   Trash2,
   Maximize2,
@@ -95,7 +93,7 @@ export default function App() {
       />
 
       {/* Clean 2-Column Workspace */}
-      <main className="flex-1 max-w-6xl w-full mx-auto p-3 sm:p-6 pb-24 sm:pb-10 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      <main className="flex-1 max-w-6xl w-full mx-auto p-3 sm:p-6 pb-10 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         
         {/* Left Control Column (Simple 3-Step Tabs) */}
         <div className="lg:col-span-5 flex flex-col gap-3.5 order-2 lg:order-1">
@@ -304,28 +302,6 @@ export default function App() {
         </div>
 
       </main>
-
-      {/* Mobile Sticky Bottom Bar */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-stone-200/80 px-4 py-2.5 flex items-center gap-2.5">
-        <button
-          onClick={() => {
-            setTargetSlot(0);
-            setIsCameraOpen(true);
-          }}
-          className="flex-1 py-2.5 rounded-xl bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs"
-        >
-          <Camera className="w-4 h-4" />
-          <span>Ambil Foto</span>
-        </button>
-
-        <button
-          onClick={() => setIsExportOpen(true)}
-          className="flex-1 py-2.5 rounded-xl bg-stone-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs"
-        >
-          <Download className="w-4 h-4" />
-          <span>Download</span>
-        </button>
-      </div>
 
       {/* Camera Modal */}
       <CameraBooth
