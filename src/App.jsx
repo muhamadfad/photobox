@@ -34,6 +34,7 @@ export default function App() {
 
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [targetSlot, setTargetSlot] = useState(0);
+  const [sessionPhotos, setSessionPhotos] = useState([]);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('template'); // 'template' | 'filters' | 'decor'
 
@@ -41,6 +42,40 @@ export default function App() {
 
   const activeTemplate =
     TEMPLATES_LIST.find((t) => t.id === activeTemplateId) || TEMPLATES_LIST[0];
+
+  const is3PhotoTheme = [
+    'denim_1989',
+    'special_day_ticket',
+    'spotify_fool',
+    'poserbox_playlist',
+    'cherish_cat',
+    'woodz_day',
+    'phetoria_sage',
+    'vintage_mahogany',
+    'boarding_flight'
+  ].includes(activeTemplate?.theme);
+
+  const effectiveSlotCount = is3PhotoTheme && slotCount === 4 ? 3 : slotCount;
+
+  const handleAddSessionPhoto = (dataUrl) => {
+    if (!dataUrl) return;
+    setSessionPhotos((prev) => [
+      ...prev,
+      {
+        id: `shot-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        url: dataUrl,
+        createdAt: new Date().toLocaleTimeString('id-ID', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        })
+      }
+    ]);
+  };
+
+  const handleRemoveSessionPhoto = (id) => {
+    setSessionPhotos((prev) => prev.filter((item) => item.id !== id));
+  };
 
   const handlePhotoCaptured = (dataUrl, slotIndex) => {
     setPhotos((prev) => {
@@ -303,14 +338,20 @@ export default function App() {
 
       </main>
 
-      {/* Camera Modal */}
+      {/* Full-Screen Studio Camera & Photo Picker */}
       <CameraBooth
         isOpen={isCameraOpen}
         onClose={() => setIsCameraOpen(false)}
         onPhotoCaptured={handlePhotoCaptured}
         onFillAllSlots={handleFillAllSlots}
+        onClearSlots={handleClearPhotos}
+        photos={photos}
+        sessionPhotos={sessionPhotos}
+        onAddSessionPhoto={handleAddSessionPhoto}
+        onRemoveSessionPhoto={handleRemoveSessionPhoto}
+        activeTemplate={activeTemplate}
         targetSlot={targetSlot}
-        totalSlots={slotCount}
+        totalSlots={effectiveSlotCount}
         filterSettings={filterSettings}
       />
 
