@@ -257,7 +257,7 @@ export default function App() {
 
             <div className={`w-full flex justify-center items-center ${mobileZoom ? 'overflow-x-auto py-2' : ''}`}>
               <div
-                className="shrink-0 min-w-max transition-transform duration-200 origin-top flex justify-center items-center"
+                className="shrink-0 min-w-max origin-top flex justify-center items-center"
                 style={{
                   transform:
                     !mobileZoom && typeof window !== 'undefined' && window.innerWidth < 640

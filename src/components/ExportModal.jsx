@@ -56,25 +56,24 @@ export default function ExportModal({
 
       const originalNode = targetRef.current;
       const parentNode = originalNode.parentElement;
-      const prevParentTransition = parentNode ? parentNode.style.transition : '';
-      const prevParentTransform = parentNode ? parentNode.style.transform : '';
-      const prevParentMargin = parentNode ? parentNode.style.margin : '';
-      const prevOriginalWidth = originalNode.style.width;
-      const prevOriginalMinWidth = originalNode.style.minWidth;
-      const prevOriginalFlexShrink = originalNode.style.flexShrink;
+      const prevParentStyle = parentNode ? parentNode.getAttribute('style') : null;
+      const prevOriginalStyle = originalNode.getAttribute('style');
 
       const hoverPrompts = Array.from(originalNode.querySelectorAll('[data-hover-prompt]'));
       const photoOverlays = Array.from(originalNode.querySelectorAll('[data-photo-overlay]'));
       const savedImgSrcs = [];
-      const savedSlotStyles = [];
+      const lockedDivs = [];
 
       const restoreDomState = () => {
         savedImgSrcs.forEach(({ imgEl, src }) => {
           imgEl.src = src;
         });
-        savedSlotStyles.forEach(({ el, width, height }) => {
-          el.style.width = width;
-          el.style.height = height;
+        lockedDivs.forEach(({ el, prevStyle }) => {
+          if (prevStyle === null) {
+            el.removeAttribute('style');
+          } else {
+            el.setAttribute('style', prevStyle);
+          }
         });
         photoOverlays.forEach((el) => {
           el.style.display = '';
@@ -82,49 +81,58 @@ export default function ExportModal({
         hoverPrompts.forEach((el) => {
           el.style.display = '';
         });
-        originalNode.style.width = prevOriginalWidth;
-        originalNode.style.minWidth = prevOriginalMinWidth;
-        originalNode.style.flexShrink = prevOriginalFlexShrink;
+        if (prevOriginalStyle === null) {
+          originalNode.removeAttribute('style');
+        } else {
+          originalNode.setAttribute('style', prevOriginalStyle);
+        }
         if (parentNode) {
-          parentNode.style.transform = prevParentTransform;
-          parentNode.style.margin = prevParentMargin;
-          // Restore transition on next frame so it doesn't animate back visibly
-          requestAnimationFrame(() => {
-            if (parentNode) parentNode.style.transition = prevParentTransition;
-          });
+          if (prevParentStyle === null) {
+            parentNode.removeAttribute('style');
+          } else {
+            parentNode.setAttribute('style', prevParentStyle);
+          }
         }
       };
 
       try {
         setIsGenerating(true);
 
-        // 1. Disable CSS transition FIRST, then unscale mobile wrapper & lock max-content width
-        // so layout snaps to 1:1 in 0ms without 200ms transition lag or mobile flexbox squishing!
+        // 1. Detach originalNode from mobile flexbox & scale wrapper so it renders at true 1:1 unclipped dimensions at (0, 0)
         if (parentNode) {
           parentNode.style.transition = 'none';
           parentNode.style.transform = 'none';
-          parentNode.style.margin = '0';
+          parentNode.style.margin = '0px';
         }
-        originalNode.style.flexShrink = '0';
-        originalNode.style.minWidth = 'max-content';
+
+        originalNode.style.transition = 'none';
+        originalNode.style.transform = 'none';
+        originalNode.style.position = 'fixed';
+        originalNode.style.top = '0px';
+        originalNode.style.left = '0px';
+        originalNode.style.zIndex = '-10';
+        originalNode.style.margin = '0px';
         originalNode.style.width = 'max-content';
+        originalNode.style.height = 'max-content';
+        originalNode.style.minWidth = 'max-content';
+        originalNode.style.maxWidth = 'none';
+        originalNode.style.maxHeight = 'none';
+        originalNode.style.flexShrink = '0';
 
         // Hide interactive hover prompts during capture
         hoverPrompts.forEach((el) => {
           el.style.display = 'none';
         });
 
-        // Force synchronous browser layout reflow + wait two frames for mobile Safari/Chrome
+        // Force synchronous browser layout reflow + wait two frames for mobile WebKit
         void originalNode.offsetHeight;
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
         const rootRect = originalNode.getBoundingClientRect();
-        const rootWidth = Math.round(originalNode.offsetWidth || rootRect.width || 580);
-        const rootHeight = Math.round(originalNode.offsetHeight || rootRect.height || 760);
-        const scaleX = rootRect.width > 0 ? rootRect.width / rootWidth : 1;
-        const scaleY = rootRect.height > 0 ? rootRect.height / rootHeight : 1;
+        const rootWidth = Math.round(rootRect.width || originalNode.offsetWidth || 540);
+        const rootHeight = Math.round(rootRect.height || originalNode.offsetHeight || 760);
 
-        // 2. Measure every photo slot at true 1:1 coordinates & preload its HTMLImageElement
+        // 2. Measure every photo slot at true 1:1 coordinates WHILE the real 4:3 photos are still loaded
         const slotNodes = Array.from(originalNode.querySelectorAll('[data-photo-slot]'));
         const slotsData = await Promise.all(
           slotNodes.map(async (slotEl) => {
@@ -134,22 +142,10 @@ export default function ExportModal({
             const radius = parseFloat(cs.borderRadius) || 2;
             const src = imgEl ? imgEl.getAttribute('src') || imgEl.src : null;
 
-            const exactX = (rect.left - rootRect.left) / scaleX;
-            const exactY = (rect.top - rootRect.top) / scaleY;
-            const exactW = rect.width / scaleX;
-            const exactH = rect.height / scaleY;
-
-            // Lock explicit pixel width & height on the outer aspect-[4/3] wrapper so mobile WebKit SVG foreignObject never collapses it
-            const wrapperEl = slotEl.parentElement;
-            if (wrapperEl && exactW > 0 && exactH > 0) {
-              savedSlotStyles.push({
-                el: wrapperEl,
-                width: wrapperEl.style.width,
-                height: wrapperEl.style.height
-              });
-              wrapperEl.style.width = `${ wrapperEl.offsetWidth || Math.round(exactW) }px`;
-              wrapperEl.style.height = `${ wrapperEl.offsetHeight || Math.round(exactH) }px`;
-            }
+            const exactX = rect.left - rootRect.left;
+            const exactY = rect.top - rootRect.top;
+            const exactW = rect.width;
+            const exactH = rect.height;
 
             let loadedImg = null;
             if (src && src !== TINY_TRANSPARENT_GIF) {
@@ -188,14 +184,46 @@ export default function ExportModal({
           const rect = el.getBoundingClientRect();
           return {
             el,
-            x: (rect.left - rootRect.left) / scaleX,
-            y: (rect.top - rootRect.top) / scaleY,
-            width: rect.width / scaleX,
-            height: rect.height / scaleY
+            x: rect.left - rootRect.left,
+            y: rect.top - rootRect.top,
+            width: rect.width,
+            height: rect.height
           };
         });
 
-        // 3. Temporarily replace heavy base64 img src with 1x1 pixel so SVG foreignObject is lightweight
+        // 3. Freeze exact pixel width & height on all layout divs BEFORE swapping img.src to 1x1 GIF
+        // This guarantees iOS Safari <foreignObject> never changes aspect-[4/3] slots into 1:1 squares or shifts headers!
+        const allChildDivs = Array.from(originalNode.querySelectorAll('div')).filter(
+          (el) =>
+            !el.hasAttribute('data-floating-overlay') &&
+            !el.hasAttribute('data-hover-prompt') &&
+            !el.hasAttribute('data-photo-overlay')
+        );
+        const divMeasurements = allChildDivs.map((el) => {
+          const r = el.getBoundingClientRect();
+          return {
+            el,
+            prevStyle: el.getAttribute('style'),
+            w: r.width,
+            h: r.height
+          };
+        });
+        divMeasurements.forEach(({ el, prevStyle, w, h }) => {
+          if (w > 0 && h > 0) {
+            lockedDivs.push({ el, prevStyle });
+            el.style.width = `${w}px`;
+            el.style.height = `${h}px`;
+            el.style.minWidth = `${w}px`;
+            el.style.maxWidth = `${w}px`;
+            el.style.minHeight = `${h}px`;
+            el.style.maxHeight = `${h}px`;
+            el.style.flexShrink = '0';
+            el.style.flexGrow = '0';
+            el.style.boxSizing = 'border-box';
+          }
+        });
+
+        // 4. Replace heavy base64 img src with 1x1 pixel so SVG foreignObject is lightweight
         slotsData.forEach((slot) => {
           if (slot.imgEl && slot.originalSrc) {
             savedImgSrcs.push({ imgEl: slot.imgEl, src: slot.originalSrc });
@@ -217,21 +245,26 @@ export default function ExportModal({
             pixelRatio: ratio,
             width: rootWidth,
             height: rootHeight,
+            canvasWidth: rootWidth,
+            canvasHeight: rootHeight,
             backgroundColor: bgColor,
             skipFonts: true,
             cacheBust: false,
             style: {
+              position: 'relative',
+              top: '0px',
+              left: '0px',
               transform: 'none',
               transition: 'none',
-              margin: '0',
+              margin: '0px',
               width: `${rootWidth}px`,
               height: `${rootHeight}px`,
               minWidth: `${rootWidth}px`,
               maxWidth: `${rootWidth}px`,
+              minHeight: `${rootHeight}px`,
+              maxHeight: `${rootHeight}px`,
               flexShrink: '0',
-              position: 'relative',
-              top: '0px',
-              left: '0px'
+              boxSizing: 'border-box'
             }
           });
         } catch (svgErr) {

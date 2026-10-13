@@ -53,9 +53,9 @@ export default function CameraBooth({
     tableG: '0 0.063 0.125 0.188 0.25 0.313 0.375 0.438 0.5 0.563 0.625 0.688 0.75 0.813 0.875 0.938 1',
     tableB: '0 0.063 0.125 0.188 0.25 0.313 0.375 0.438 0.5 0.563 0.625 0.688 0.75 0.813 0.875 0.938 1'
   });
-  const [manualExposure, setManualExposure] = useState(0); // -30 .. +30
-  const [manualDehaze, setManualDehaze] = useState(12); // Default +12 extra dehaze for crisp blacks on hazy webcams
-  const [focusPoint, setFocusPoint] = useState({ x: 0.5, y: 0.45 });
+  const [manualExposure, setManualExposure] = useState(0); // -25 .. +25
+  const [manualDehaze, setManualDehaze] = useState(0); // Default 0 so iPhone/mobile shadows are never crushed
+  const [focusPoint, setFocusPoint] = useState({ x: 0.5, y: 0.5 });
   const [focusState, setFocusState] = useState('locked'); // 'locking' | 'locked'
   const [showFocusBox, setShowFocusBox] = useState(true);
 
@@ -350,12 +350,21 @@ export default function CameraBooth({
 
   if (!isOpen) return null;
 
+  const isIOSWebKit =
+    typeof navigator !== 'undefined' &&
+    (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
+  const userBrightness = filterSettings?.brightness || 0;
   const userContrast = filterSettings?.contrast || 0;
   const userSaturation = filterSettings?.saturation || 0;
-  const totalContrast = 1 + (userContrast + (sceneInfo.contrastBoost ?? 8)) / 100;
-  const totalSaturation = 1 + (userSaturation + (sceneInfo.saturationBoost ?? 14)) / 100;
+  const totalBrightness = 1 + (userBrightness + (sceneInfo.boostNeeded ?? 10)) / 100;
+  const totalContrast = 1 + (userContrast + (sceneInfo.contrastBoost ?? 4)) / 100;
+  const totalSaturation = 1 + (userSaturation + (sceneInfo.saturationBoost ?? 10)) / 100;
 
-  const liveVideoFilter = `url(#pikubooth-live-isp) contrast(${Math.max(1.0, Math.min(1.35, totalContrast)).toFixed(2)}) saturate(${Math.max(0, Math.min(1.55, totalSaturation)).toFixed(2)})`;
+  const liveVideoFilter = isIOSWebKit
+    ? `brightness(${Math.max(0.92, Math.min(1.55, totalBrightness)).toFixed(2)}) contrast(${Math.max(0.96, Math.min(1.22, totalContrast)).toFixed(2)}) saturate(${Math.max(0, Math.min(1.45, totalSaturation)).toFixed(2)})`
+    : `url(#pikubooth-live-isp) brightness(${(1 + userBrightness / 100).toFixed(2)}) contrast(${Math.max(0.96, Math.min(1.25, totalContrast)).toFixed(2)}) saturate(${Math.max(0, Math.min(1.48, totalSaturation)).toFixed(2)})`;
 
   return (
     <div
