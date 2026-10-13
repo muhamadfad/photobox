@@ -285,18 +285,12 @@ export default function ExportModal({
             svgDataUrl = await toSvg(originalNode, { ...svgOptions, skipFonts: true });
           }
 
-          // Upgrade SVG intrinsic width & height to targetW x targetH while keeping viewBox="0 0 rootWidth rootHeight"
-          // This forces iOS Safari WebKit & Chrome to rasterize <foreignObject> vectorially at 4x Retina instead of upscaling 1x!
-          const hiResSvgUrl = svgDataUrl
-            .replace(`width%3D%22${rootWidth}%22`, `width%3D%22${targetW}%22`)
-            .replace(`height%3D%22${rootHeight}%22`, `height%3D%22${targetH}%22`);
-
           const svgImg = await new Promise((resolve, reject) => {
             const im = new Image();
             im.crossOrigin = 'anonymous';
             im.onload = () => resolve(im);
             im.onerror = reject;
-            im.src = hiResSvgUrl;
+            im.src = svgDataUrl;
           });
 
           ctx.drawImage(svgImg, 0, 0, targetW, targetH);
