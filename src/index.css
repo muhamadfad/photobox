@@ -95,6 +95,15 @@
   background: #b8b2a5;
 }
 
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Print photostrip cleanly without page clutter */
 @media print {
   * {

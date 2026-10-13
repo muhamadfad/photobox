@@ -14,13 +14,19 @@ import {
   Plus,
   Images,
   Maximize2,
-  ArrowLeft
+  ArrowLeft,
+  Sparkles
 } from 'lucide-react';
 import { soundFX } from '../utils/audio';
 import {
   analyzeVideoScene,
   processIntelligentCapture
 } from '../utils/filterEngine';
+import {
+  FACE_EFFECTS,
+  FaceEffectOverlay,
+  renderFaceEffectToCanvas
+} from '../utils/faceEffects';
 import confetti from 'canvas-confetti';
 
 export default function CameraBooth({
@@ -74,6 +80,18 @@ export default function CameraBooth({
   const [focusPoint, setFocusPoint] = useState({ x: 0.5, y: 0.5 });
   const [focusState, setFocusState] = useState('locked'); // 'locking' | 'locked'
   const [showFocusBox, setShowFocusBox] = useState(true);
+
+  // AR Face Filter State (Instagram Butterfly, Flower Crown, etc.)
+  const [selectedFaceEffect, setSelectedFaceEffect] = useState('butterfly_ig');
+  const [showEffectsBar, setShowEffectsBar] = useState(true);
+
+  // Dynamic AR Face Anchor (follows user auto-focus tap / centered default)
+  const faceAnchor = {
+    cx: focusPoint.x,
+    cy: Math.max(0.32, Math.min(0.65, focusPoint.y - 0.04)),
+    fw: 0.38,
+    fh: 0.50
+  };
 
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -316,6 +334,11 @@ export default function CameraBooth({
         autoLight
       }
     });
+
+    // Bake AR Face Filter onto captured high-res canvas (Instagram Butterfly, Flower Crown, etc.)
+    if (selectedFaceEffect && selectedFaceEffect !== 'none') {
+      renderFaceEffectToCanvas(ctx, outW, outH, selectedFaceEffect, faceAnchor);
+    }
 
     setFlash(true);
     soundFX.playShutter();
@@ -639,6 +662,15 @@ export default function CameraBooth({
                     }}
                   />
 
+                  {/* AR Real-Time Animated Face Effect Overlay */}
+                  {selectedFaceEffect !== 'none' && (
+                    <FaceEffectOverlay
+                      effectId={selectedFaceEffect}
+                      anchor={faceAnchor}
+                      isMirrored={isMirrored}
+                    />
+                  )}
+
                   {/* Interactive Auto-Focus & Auto-Exposure Reticle Box */}
                   {showFocusBox && (
                     <div
@@ -666,6 +698,50 @@ export default function CameraBooth({
                     </div>
                   )}
 
+                  {/* Floating Instagram-Style AR Face Filter Carousel */}
+                  {showEffectsBar && (
+                    <div
+                      className="absolute bottom-11 sm:bottom-12 inset-x-0 z-30 px-3 flex flex-col items-center gap-1 pointer-events-auto"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* Active filter name pill */}
+                      <div className="bg-black/75 backdrop-blur-md text-white/95 px-3 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold border border-white/15 flex items-center gap-1.5 shadow-lg">
+                        <Sparkles className="w-3 h-3 text-amber-300" />
+                        <span>
+                          Filter:{' '}
+                          <strong className="text-rose-400">
+                            {FACE_EFFECTS.find((f) => f.id === selectedFaceEffect)?.name || 'Normal'}
+                          </strong>
+                        </span>
+                        {selectedFaceEffect !== 'none' && (
+                          <span className="text-stone-300 text-[10px] hidden sm:inline">• Klik layar untuk pas-kan posisi</span>
+                        )}
+                      </div>
+
+                      {/* Filter Buttons Carousel */}
+                      <div className="flex items-center gap-1.5 p-1 bg-black/70 backdrop-blur-md rounded-2xl border border-white/20 max-w-full overflow-x-auto no-scrollbar shadow-2xl">
+                        {FACE_EFFECTS.map((eff) => {
+                          const isSelected = selectedFaceEffect === eff.id;
+                          return (
+                            <button
+                              key={eff.id}
+                              onClick={() => setSelectedFaceEffect(eff.id)}
+                              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all shrink-0 ${
+                                isSelected
+                                  ? 'bg-rose-500 text-white shadow-md scale-105 ring-2 ring-rose-400/60'
+                                  : 'text-stone-300 hover:text-white hover:bg-white/10'
+                              }`}
+                              title={eff.description}
+                            >
+                              <span className="text-base leading-none">{eff.badge}</span>
+                              <span className="text-[11px]">{eff.shortLabel}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Live Auto-Focus & Auto-Cahaya Status Pill */}
                   <div className="absolute bottom-3 left-3 z-20 pointer-events-none flex items-center gap-1.5 bg-stone-900/75 backdrop-blur-xs text-white px-3 py-1 rounded-full text-[11px] font-semibold border border-white/15">
                     <span
@@ -689,10 +765,10 @@ export default function CameraBooth({
                 </>
               )}
 
-              {/* Top-Left Camera Controls: Flip, Mirror, Re-Focus */}
+              {/* Top-Left Camera Controls: Flip, Mirror, Re-Focus, Filter Toggle */}
               {!cameraError && (
                 <div
-                  className="absolute top-3 left-3 z-20 flex gap-1.5"
+                  className="absolute top-3 left-3 z-20 flex flex-wrap gap-1.5"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
@@ -716,6 +792,18 @@ export default function CameraBooth({
                   >
                     <Focus className="w-3.5 h-3.5 text-emerald-400" />
                     <span>Auto-Fokus</span>
+                  </button>
+                  <button
+                    onClick={() => setShowEffectsBar(!showEffectsBar)}
+                    className={`px-3 py-1.5 rounded-full backdrop-blur-xs transition flex items-center gap-1.5 text-xs font-semibold ${
+                      selectedFaceEffect !== 'none'
+                        ? 'bg-rose-500 text-white shadow-xs'
+                        : 'bg-stone-900/65 hover:bg-stone-900/85 text-white'
+                    }`}
+                    title="Buka / Tutup Pilihan Filter Wajah"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                    <span>Filter {selectedFaceEffect !== 'none' ? 'Aktif' : ''}</span>
                   </button>
                 </div>
               )}
@@ -804,6 +892,22 @@ export default function CameraBooth({
 
             {/* Primary Shutter & Gallery Action Buttons */}
             <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                onClick={() => setShowEffectsBar(!showEffectsBar)}
+                className={`px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
+                  selectedFaceEffect !== 'none'
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                    : ringLightOn
+                    ? 'bg-stone-100 hover:bg-stone-200 text-stone-700'
+                    : 'bg-white/10 hover:bg-white/15 text-white'
+                }`}
+                title="Pilih Efek Filter Wajah (Kupu-kupu, Bunga, Kucing, dll)"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span className="hidden sm:inline">Efek:</span>
+                <span>{FACE_EFFECTS.find((f) => f.id === selectedFaceEffect)?.shortLabel || 'Filter'}</span>
+              </button>
+
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className={`px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
