@@ -39,14 +39,14 @@ export default function CameraBooth({
   const [ringLightOn, setRingLightOn] = useState(false);
   const [cameraError, setCameraError] = useState(null);
 
-  // Bi-Directional Auto-Focus & Auto-Lighting Telemetry (17-Point GPU LUT Dehaze + Closed-Form Face Exposure)
+  // Non-Destructive Auto-Focus & Gentle Auto-Exposure Telemetry (Preserves 100% Native Camera Quality)
   const [sceneInfo, setSceneInfo] = useState({
-    luminance: 55,
+    luminance: 58,
     status: 'OPTIMAL',
-    label: 'AF • Studio Auto-Jernih',
+    label: 'AF • Kamera Natural HD',
     boostNeeded: 0,
-    contrastBoost: 8,
-    saturationBoost: 12,
+    contrastBoost: 0,
+    saturationBoost: 0,
     gamma: 1.0,
     dehazeFloor: 0,
     tableR: '0 0.063 0.125 0.188 0.25 0.313 0.375 0.438 0.5 0.563 0.625 0.688 0.75 0.813 0.875 0.938 1',
@@ -54,7 +54,7 @@ export default function CameraBooth({
     tableB: '0 0.063 0.125 0.188 0.25 0.313 0.375 0.438 0.5 0.563 0.625 0.688 0.75 0.813 0.875 0.938 1'
   });
   const [manualExposure, setManualExposure] = useState(0); // -25 .. +25
-  const [manualDehaze, setManualDehaze] = useState(0); // Default 0 so iPhone/mobile shadows are never crushed
+  const [autoLight, setAutoLight] = useState(true); // Gentle exposure adaptation vs 100% raw camera
   const [focusPoint, setFocusPoint] = useState({ x: 0.5, y: 0.5 });
   const [focusState, setFocusState] = useState('locked'); // 'locking' | 'locked'
   const [showFocusBox, setShowFocusBox] = useState(true);
@@ -70,7 +70,7 @@ export default function CameraBooth({
   }, [targetSlot]);
 
   // Apply hardware-level Continuous Auto-Focus, Auto-Exposure & Auto-White-Balance
-  const applyHardwareCameraEnhancements = async (mediaStream, point = { x: 0.5, y: 0.45 }) => {
+  const applyHardwareCameraEnhancements = async (mediaStream, point = { x: 0.5, y: 0.5 }) => {
     try {
       const track = mediaStream?.getVideoTracks?.()[0];
       if (!track || typeof track.getCapabilities !== 'function') return;
@@ -106,7 +106,7 @@ export default function CameraBooth({
     }
   };
 
-  const triggerAutoFocusLock = (newPoint = { x: 0.5, y: 0.45 }) => {
+  const triggerAutoFocusLock = (newPoint = { x: 0.5, y: 0.5 }) => {
     setFocusPoint(newPoint);
     setFocusState('locking');
     setShowFocusBox(true);
@@ -116,7 +116,7 @@ export default function CameraBooth({
     if (videoRef.current && videoRef.current.readyState >= 2) {
       const info = analyzeVideoScene(videoRef.current, newPoint, {
         exposure: manualExposure,
-        dehaze: manualDehaze
+        autoLight
       });
       setSceneInfo(info);
       if (stream) {
@@ -145,14 +145,14 @@ export default function CameraBooth({
         audio: false
       });
       setStream(mediaStream);
-      applyHardwareCameraEnhancements(mediaStream, { x: 0.5, y: 0.45 });
+      applyHardwareCameraEnhancements(mediaStream, { x: 0.5, y: 0.5 });
 
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
         videoRef.current.onloadedmetadata = () => {
           videoRef.current?.play().catch(() => {});
           setTimeout(() => {
-            triggerAutoFocusLock({ x: 0.5, y: 0.45 });
+            triggerAutoFocusLock({ x: 0.5, y: 0.5 });
           }, 250);
         };
       }
@@ -176,14 +176,14 @@ export default function CameraBooth({
     };
   }, [isOpen, facingMode]);
 
-  // Continuous Real-Time Auto-Levels Dehaze & Face Exposure Analyzer (every 280ms)
+  // Continuous Real-Time Gentle Face Exposure Analyzer (every 300ms)
   useEffect(() => {
     if (!isOpen || cameraError) return;
     if (videoRef.current && videoRef.current.readyState >= 2) {
       setSceneInfo(
         analyzeVideoScene(videoRef.current, focusPoint, {
           exposure: manualExposure,
-          dehaze: manualDehaze
+          autoLight
         })
       );
     }
@@ -191,13 +191,13 @@ export default function CameraBooth({
       if (videoRef.current && videoRef.current.readyState >= 2) {
         const res = analyzeVideoScene(videoRef.current, focusPoint, {
           exposure: manualExposure,
-          dehaze: manualDehaze
+          autoLight
         });
         setSceneInfo(res);
       }
-    }, 280);
+    }, 300);
     return () => clearInterval(interval);
-  }, [isOpen, cameraError, focusPoint, manualExposure, manualDehaze]);
+  }, [isOpen, cameraError, focusPoint, manualExposure, autoLight]);
 
   const handleToggleFacing = () => {
     const nextMode = facingMode === 'user' ? 'environment' : 'user';
@@ -215,7 +215,7 @@ export default function CameraBooth({
     triggerAutoFocusLock({ x: clickX, y: clickY });
   };
 
-  // Capture frame with Full 17-Point Auto-Dehaze & S-Curve + Auto-Focus Sharpen
+  // Capture frame preserving 100% native camera sharpness & colors with gentle exposure adaptation
   const captureFrame = (slotToFill) => {
     if (!videoRef.current) return null;
     const video = videoRef.current;
@@ -238,13 +238,10 @@ export default function CameraBooth({
     };
     processIntelligentCapture(ctx, canvas.width, canvas.height, {
       autoTone: true,
-      skinSmooth: true,
-      studioLight: true,
-      autoFocusSharpen: true,
       focusPoint: effectiveFocusPoint,
       manualAdjust: {
         exposure: manualExposure,
-        dehaze: manualDehaze
+        autoLight
       }
     });
 
@@ -252,7 +249,7 @@ export default function CameraBooth({
     soundFX.playShutter();
     setTimeout(() => setFlash(false), 180);
 
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.96);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.98);
     onPhotoCaptured(dataUrl, slotToFill);
     return dataUrl;
   };
@@ -319,7 +316,7 @@ export default function CameraBooth({
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const maxDim = 1600;
+        const maxDim = 1800;
         let w = img.naturalWidth || 1200;
         let h = img.naturalHeight || 900;
         if (w > maxDim || h > maxDim) {
@@ -335,13 +332,7 @@ export default function CameraBooth({
         canvas.height = h;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, w, h);
-        processIntelligentCapture(ctx, w, h, {
-          autoTone: true,
-          skinSmooth: true,
-          studioLight: true,
-          autoFocusSharpen: true
-        });
-        onPhotoCaptured(canvas.toDataURL('image/jpeg', 0.96), currentSlotIndex);
+        onPhotoCaptured(canvas.toDataURL('image/jpeg', 0.98), currentSlotIndex);
       };
       img.src = event.target.result;
     };
@@ -358,13 +349,13 @@ export default function CameraBooth({
   const userBrightness = filterSettings?.brightness || 0;
   const userContrast = filterSettings?.contrast || 0;
   const userSaturation = filterSettings?.saturation || 0;
-  const totalBrightness = 1 + (userBrightness + (sceneInfo.boostNeeded ?? 10)) / 100;
-  const totalContrast = 1 + (userContrast + (sceneInfo.contrastBoost ?? 4)) / 100;
-  const totalSaturation = 1 + (userSaturation + (sceneInfo.saturationBoost ?? 10)) / 100;
+  const totalBrightness = 1 + (userBrightness + (sceneInfo.boostNeeded ?? 0)) / 100;
+  const totalContrast = 1 + userContrast / 100;
+  const totalSaturation = 1 + userSaturation / 100;
 
   const liveVideoFilter = isIOSWebKit
-    ? `brightness(${Math.max(0.92, Math.min(1.55, totalBrightness)).toFixed(2)}) contrast(${Math.max(0.96, Math.min(1.22, totalContrast)).toFixed(2)}) saturate(${Math.max(0, Math.min(1.45, totalSaturation)).toFixed(2)})`
-    : `url(#pikubooth-live-isp) brightness(${(1 + userBrightness / 100).toFixed(2)}) contrast(${Math.max(0.96, Math.min(1.25, totalContrast)).toFixed(2)}) saturate(${Math.max(0, Math.min(1.48, totalSaturation)).toFixed(2)})`;
+    ? `brightness(${Math.max(0.85, Math.min(1.4, totalBrightness)).toFixed(2)}) contrast(${Math.max(0.9, Math.min(1.25, totalContrast)).toFixed(2)}) saturate(${Math.max(0, Math.min(1.35, totalSaturation)).toFixed(2)})`
+    : `url(#pikubooth-live-isp) brightness(${(1 + userBrightness / 100).toFixed(2)}) contrast(${Math.max(0.9, Math.min(1.25, totalContrast)).toFixed(2)}) saturate(${Math.max(0, Math.min(1.35, totalSaturation)).toFixed(2)})`;
 
   return (
     <div
@@ -372,20 +363,14 @@ export default function CameraBooth({
         ringLightOn ? 'bg-amber-50/90' : 'bg-stone-950/80'
       }`}
     >
-      {/* Hardware-Accelerated 60fps GPU ISP: 17-Point Auto-Levels Dehaze & S-Curve LUT + Real-Time Optical Unsharp Mask */}
+      {/* Pure Color-Neutral Gentle Exposure LUT (Zero gritty convolution sharpening) */}
       <svg width="0" height="0" className="absolute pointer-events-none" aria-hidden="true">
         <filter id="pikubooth-live-isp" colorInterpolationFilters="sRGB">
-          <feComponentTransfer result="toned">
+          <feComponentTransfer>
             <feFuncR type="table" tableValues={sceneInfo.tableR} />
             <feFuncG type="table" tableValues={sceneInfo.tableG} />
             <feFuncB type="table" tableValues={sceneInfo.tableB} />
           </feComponentTransfer>
-          <feConvolveMatrix
-            in="toned"
-            order="3 3"
-            kernelMatrix="0 -0.22 0 -0.22 1.88 -0.22 0 -0.22 0"
-            preserveAlpha="true"
-          />
         </filter>
       </svg>
 
@@ -558,7 +543,7 @@ export default function CameraBooth({
                   <FlipHorizontal className="w-3.5 h-3.5" />
                 </button>
                 <button
-                  onClick={() => triggerAutoFocusLock({ x: 0.5, y: 0.45 })}
+                  onClick={() => triggerAutoFocusLock({ x: 0.5, y: 0.5 })}
                   className="px-2.5 py-1 rounded-full bg-stone-900/60 hover:bg-stone-900/80 text-white backdrop-blur-xs transition flex items-center gap-1 text-[10px] font-semibold"
                   title="Kunci Ulang Auto-Fokus & Cahaya"
                 >
@@ -587,10 +572,32 @@ export default function CameraBooth({
             </div>
           </div>
 
-          {/* Quick Live Exposure & Anti-Fog Sliders for Any Room Lighting */}
+          {/* Clean Exposure Control & Native Camera Mode Toggle */}
           {!cameraError && (
-            <div className="mt-2.5 px-2 py-2 bg-white rounded-xl border border-stone-200/80 grid grid-cols-2 gap-3 text-[11px]">
-              <div className="flex items-center gap-2">
+            <div className="mt-2.5 px-2.5 py-2 bg-white rounded-xl border border-stone-200/80 flex items-center justify-between gap-3 text-[11px]">
+              <div className="flex items-center bg-stone-100 p-0.5 rounded-lg shrink-0">
+                <button
+                  onClick={() => setAutoLight(true)}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition ${
+                    autoLight ? 'bg-white text-stone-900 shadow-2xs' : 'text-stone-500'
+                  }`}
+                >
+                  Auto-Cahaya
+                </button>
+                <button
+                  onClick={() => {
+                    setAutoLight(false);
+                    setManualExposure(0);
+                  }}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition ${
+                    !autoLight ? 'bg-white text-stone-900 shadow-2xs' : 'text-stone-500'
+                  }`}
+                >
+                  Asli Kamera
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 flex-1">
                 <span className="font-semibold text-stone-600 shrink-0">Cahaya</span>
                 <input
                   type="range"
@@ -602,21 +609,6 @@ export default function CameraBooth({
                 />
                 <span className="font-mono text-[10px] text-stone-500 w-7 text-right">
                   {manualExposure > 0 ? `+${manualExposure}` : manualExposure}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-stone-600 shrink-0">Anti-Kabut</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="35"
-                  value={manualDehaze}
-                  onChange={(e) => setManualDehaze(Number(e.target.value))}
-                  className="w-full h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-stone-800"
-                />
-                <span className="font-mono text-[10px] text-stone-500 w-7 text-right">
-                  +{manualDehaze}
                 </span>
               </div>
             </div>
