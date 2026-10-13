@@ -135,15 +135,30 @@ export default function CameraBooth({
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
       }
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: facing,
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          frameRate: { ideal: 30 }
-        },
-        audio: false
-      });
+      let mediaStream;
+      try {
+        // Request native 4:3 high-res sensor frame first (prevents iPhone 9:16 portrait crop loss)
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: facing,
+            width: { min: 1280, ideal: 2560 },
+            height: { min: 960, ideal: 1920 },
+            aspectRatio: { ideal: 4 / 3 },
+            frameRate: { ideal: 30 }
+          },
+          audio: false
+        });
+      } catch (constraintErr) {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: facing,
+            width: { ideal: 1920 },
+            height: { ideal: 1440 },
+            frameRate: { ideal: 30 }
+          },
+          audio: false
+        });
+      }
       setStream(mediaStream);
       applyHardwareCameraEnhancements(mediaStream, { x: 0.5, y: 0.5 });
 
@@ -215,28 +230,52 @@ export default function CameraBooth({
     triggerAutoFocusLock({ x: clickX, y: clickY });
   };
 
-  // Capture frame preserving 100% native camera sharpness & colors with gentle exposure adaptation
+  // Capture frame at Ultra-HD 4:3 resolution preserving 100% native camera sharpness & colors
   const captureFrame = (slotToFill) => {
     if (!videoRef.current) return null;
     const video = videoRef.current;
+    const vw = video.videoWidth || 1600;
+    const vh = video.videoHeight || 1200;
+
+    // Match the 4:3 viewfinder crop directly at maximum resolution
+    const targetRatio = 4 / 3;
+    const videoRatio = vw / vh;
+    let sx = 0;
+    let sy = 0;
+    let sw = vw;
+    let sh = vh;
+
+    if (videoRatio > targetRatio) {
+      sw = vh * targetRatio;
+      sx = (vw - sw) / 2;
+    } else {
+      sh = vw / targetRatio;
+      sy = (vh - sh) / 2;
+    }
+
+    const outW = Math.min(2400, Math.max(1600, Math.round(sw)));
+    const outH = Math.round(outW * 0.75);
+
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 960;
+    canvas.width = outW;
+    canvas.height = outH;
     const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     ctx.save();
     if (isMirrored) {
-      ctx.translate(canvas.width, 0);
+      ctx.translate(outW, 0);
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, outW, outH);
     ctx.restore();
 
     const effectiveFocusPoint = {
       x: isMirrored ? 1 - focusPoint.x : focusPoint.x,
       y: focusPoint.y
     };
-    processIntelligentCapture(ctx, canvas.width, canvas.height, {
+    processIntelligentCapture(ctx, outW, outH, {
       autoTone: true,
       focusPoint: effectiveFocusPoint,
       manualAdjust: {
@@ -249,7 +288,7 @@ export default function CameraBooth({
     soundFX.playShutter();
     setTimeout(() => setFlash(false), 180);
 
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.98);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.99);
     onPhotoCaptured(dataUrl, slotToFill);
     return dataUrl;
   };

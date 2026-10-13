@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Printer, Check, X, Loader2, Sparkles, Image as ImageIcon } from 'lucide-react';
-import { toCanvas } from 'html-to-image';
+import { toSvg, toCanvas } from 'html-to-image';
 import { drawPhotoWithFiltersToCanvas } from '../utils/filterEngine';
 import confetti from 'canvas-confetti';
 
@@ -234,21 +234,31 @@ export default function ExportModal({
           el.style.display = 'none';
         });
 
-        // High-DPI ratio (2.5x Ultra-HD, safe on both iOS Safari WebKit and Desktop)
-        const ratio = 2.5;
+        // Ultra-HD 4K Retina ratio (4.2x for Single Strip = ~1150px wide, 3.6x for Twin Strip = ~1920px wide)
+        const ratio = rootWidth < 360 ? 4.2 : 3.6;
+        const targetW = Math.round(rootWidth * ratio);
+        const targetH = Math.round(rootHeight * ratio);
         const bgColor = '#f8f7f4';
 
-        let canvas;
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, targetW, targetH);
+
         try {
-          canvas = await toCanvas(originalNode, {
-            quality: 0.98,
+          const svgOptions = {
+            quality: 1.0,
             pixelRatio: ratio,
             width: rootWidth,
             height: rootHeight,
-            canvasWidth: rootWidth,
-            canvasHeight: rootHeight,
+            canvasWidth: targetW,
+            canvasHeight: targetH,
             backgroundColor: bgColor,
-            skipFonts: true,
+            skipFonts: false,
             cacheBust: false,
             style: {
               position: 'relative',
@@ -266,18 +276,47 @@ export default function ExportModal({
               flexShrink: '0',
               boxSizing: 'border-box'
             }
+          };
+
+          let svgDataUrl;
+          try {
+            svgDataUrl = await toSvg(originalNode, svgOptions);
+          } catch (fontErr) {
+            svgDataUrl = await toSvg(originalNode, { ...svgOptions, skipFonts: true });
+          }
+
+          // Upgrade SVG intrinsic width & height to targetW x targetH while keeping viewBox="0 0 rootWidth rootHeight"
+          // This forces iOS Safari WebKit & Chrome to rasterize <foreignObject> vectorially at 4x Retina instead of upscaling 1x!
+          const hiResSvgUrl = svgDataUrl
+            .replace(`width%3D%22${rootWidth}%22`, `width%3D%22${targetW}%22`)
+            .replace(`height%3D%22${rootHeight}%22`, `height%3D%22${targetH}%22`);
+
+          const svgImg = await new Promise((resolve, reject) => {
+            const im = new Image();
+            im.crossOrigin = 'anonymous';
+            im.onload = () => resolve(im);
+            im.onerror = reject;
+            im.src = hiResSvgUrl;
           });
+
+          ctx.drawImage(svgImg, 0, 0, targetW, targetH);
         } catch (svgErr) {
-          canvas = document.createElement('canvas');
-          canvas.width = Math.round(rootWidth * ratio);
-          canvas.height = Math.round(rootHeight * ratio);
-          const fbCtx = canvas.getContext('2d');
-          fbCtx.fillStyle = bgColor;
-          fbCtx.fillRect(0, 0, canvas.width, canvas.height);
+          try {
+            const fbCanvas = await toCanvas(originalNode, {
+              quality: 1.0,
+              pixelRatio: ratio,
+              width: rootWidth,
+              height: rootHeight,
+              backgroundColor: bgColor,
+              skipFonts: true
+            });
+            ctx.drawImage(fbCanvas, 0, 0, targetW, targetH);
+          } catch (e) {}
         }
 
-        // 4. Direct HTML5 Canvas 2D Photo Compositing: paint every photo at exact 1:1 slot coordinates
-        const ctx = canvas.getContext('2d');
+        // 5. Direct HTML5 Canvas 2D Photo Compositing: paint every photo at exact Ultra-HD slot coordinates
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         for (const slot of slotsData) {
           if (slot.loadedImg && slot.width > 0 && slot.height > 0) {
             drawPhotoWithFiltersToCanvas(
@@ -293,7 +332,7 @@ export default function ExportModal({
           }
         }
 
-        // 5. Re-stamp any floating badges or placed stickers on top of the photos
+        // 6. Re-stamp any floating badges or placed stickers on top of the photos
         for (const item of floatingData) {
           if (item.width > 0 && item.height > 0) {
             try {
@@ -329,7 +368,7 @@ export default function ExportModal({
 
         if (cancelled) return;
 
-        // 6. Generate Preview + Both PNG (Kualitas Maksimal) & JPEG (Ukuran Ringan) Blob URLs
+        // 7. Generate Preview + Both PNG (Kualitas Maksimal) & JPEG (Ukuran Ringan) Blob URLs
         const dataUrl = canvas.toDataURL('image/png');
         setPreviewUrl(dataUrl);
 
@@ -352,7 +391,7 @@ export default function ExportModal({
             } catch (e) {}
           },
           'image/jpeg',
-          0.95
+          0.98
         );
 
         setIsGenerating(false);

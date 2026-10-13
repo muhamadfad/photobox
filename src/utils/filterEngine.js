@@ -500,9 +500,13 @@ export function getCssFilterString(settings) {
   const sat = 1 + (s.saturation || 0) / 100;
 
   // Sepia/warmth calculation
-  const warmth = (s.warmth || 0);
+  const warmth = s.warmth || 0;
   const sepia = warmth > 0 ? (warmth / 100) * 0.35 : 0;
   const hueRotate = (s.tint || 0) * 0.8;
+
+  if (b === 1 && c === 1 && sat === 1 && sepia === 0 && hueRotate === 0) {
+    return 'none';
+  }
 
   let str = `brightness(${b}) contrast(${c}) saturate(${Math.max(0, sat)})`;
   if (sepia > 0) {
@@ -516,9 +520,9 @@ export function getCssFilterString(settings) {
 
 // Generates CSS filter style object and overlay attributes
 export function getFilterStyle(settings) {
-  const s = settings || DEFAULT_FILTER_SETTINGS;
+  const filterStr = getCssFilterString(settings);
   return {
-    filter: getCssFilterString(s),
+    filter: filterStr === 'none' ? undefined : filterStr
   };
 }
 
@@ -548,6 +552,8 @@ export function drawPhotoWithFiltersToCanvas(ctx, img, dx, dy, dw, dh, radius = 
   }
 
   ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
   // Rounded rectangle clip
   const r = Math.max(0, Math.min(radius, dw / 2, dh / 2));
@@ -564,11 +570,12 @@ export function drawPhotoWithFiltersToCanvas(ctx, img, dx, dy, dw, dh, radius = 
   ctx.closePath();
   ctx.clip();
 
-  // Draw base image with CSS filter
-  try {
-    ctx.filter = getCssFilterString(s);
-  } catch (e) {
-    // Fallback if browser doesn't support ctx.filter
+  // Draw base image with CSS filter only when active
+  const filterStr = getCssFilterString(s);
+  if (filterStr !== 'none') {
+    try {
+      ctx.filter = filterStr;
+    } catch (e) {}
   }
   ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
   ctx.filter = 'none';
