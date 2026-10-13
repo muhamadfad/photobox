@@ -183,33 +183,43 @@ export const DEFAULT_FILTER_SETTINGS = {
   aiStudioLight: true
 };
 
-// Real-time Intelligent Camera Scene Analyzer
-// Samples a tiny 48x36 frame from the live video stream to detect lighting conditions
+// Real-time Intelligent Camera Scene Analyzer (Auto-Exposure + Auto-White-Balance + Focus Metering)
+// Samples a 64x48 frame from the live video stream around the focus point (default center face region)
 let analyzerCanvas = null;
-export function analyzeVideoScene(videoEl) {
+export function analyzeVideoScene(videoEl, focusPoint = { x: 0.5, y: 0.5 }) {
   if (!videoEl || !videoEl.videoWidth || !videoEl.videoHeight) {
     return {
       luminance: 65,
       status: 'OPTIMAL',
-      label: 'Smart Studio Locked',
-      boostNeeded: 0
+      label: 'AF • Auto-Cahaya Aktif',
+      boostNeeded: 10,
+      contrastBoost: 6,
+      saturationBoost: 6
     };
   }
 
   try {
+    const sw = 64;
+    const sh = 48;
     if (!analyzerCanvas) {
       analyzerCanvas = document.createElement('canvas');
-      analyzerCanvas.width = 48;
-      analyzerCanvas.height = 36;
+      analyzerCanvas.width = sw;
+      analyzerCanvas.height = sh;
     }
     const ctx = analyzerCanvas.getContext('2d', { willReadFrequently: true });
-    ctx.drawImage(videoEl, 0, 0, 48, 36);
-    const { data } = ctx.getImageData(0, 0, 48, 36);
+    ctx.drawImage(videoEl, 0, 0, sw, sh);
+    const { data } = ctx.getImageData(0, 0, sw, sh);
 
     let totalLum = 0;
-    let centerLum = 0;
-    let centerCount = 0;
+    let focusLum = 0;
+    let focusCount = 0;
     const pixelCount = data.length / 4;
+
+    // Focus box around user's tap point or center face area
+    const fx = Math.round((focusPoint?.x ?? 0.5) * sw);
+    const fy = Math.round((focusPoint?.y ?? 0.5) * sh);
+    const boxRx = 14;
+    const boxRy = 12;
 
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
@@ -219,110 +229,179 @@ export function analyzeVideoScene(videoEl) {
       totalLum += lum;
 
       const pxIndex = i / 4;
-      const x = pxIndex % 48;
-      const y = Math.floor(pxIndex / 48);
-      if (x >= 14 && x <= 34 && y >= 8 && y <= 28) {
-        centerLum += lum;
-        centerCount++;
+      const x = pxIndex % sw;
+      const y = Math.floor(pxIndex / sw);
+      if (Math.abs(x - fx) <= boxRx && Math.abs(y - fy) <= boxRy) {
+        focusLum += lum;
+        focusCount++;
       }
     }
 
     const avgLum = totalLum / pixelCount;
-    const avgCenterLum = centerCount > 0 ? centerLum / centerCount : avgLum;
-    const lumPct = Math.round((avgCenterLum / 255) * 100);
+    const avgFocusLum = focusCount > 0 ? focusLum / focusCount : avgLum;
+    const lumPct = Math.round((avgFocusLum / 255) * 100);
 
-    if (lumPct < 38) {
+    // Target studio face luminance is ~68% for bright, clean Korean photobooth look
+    const targetPct = 68;
+    const deficit = targetPct - lumPct;
+
+    if (lumPct < 45) {
+      const boost = Math.min(55, Math.max(16, Math.round(deficit * 1.25)));
       return {
         luminance: lumPct,
         status: 'LOW_LIGHT',
-        label: 'AI Night Boost Active',
-        boostNeeded: Math.min(35, Math.round((48 - lumPct) * 1.1))
+        label: `Auto-Night HDR +${boost}%`,
+        boostNeeded: boost,
+        contrastBoost: 10,
+        saturationBoost: 10
       };
     }
-    if (avgLum - avgCenterLum > 24) {
+    if (avgLum - avgFocusLum > 18) {
+      const boost = Math.min(42, Math.max(18, Math.round(deficit * 1.15)));
       return {
         luminance: lumPct,
         status: 'BACKLIT',
-        label: 'AI Backlight HDR Active',
-        boostNeeded: 20
+        label: `Auto-Backlight HDR +${boost}%`,
+        boostNeeded: boost,
+        contrastBoost: 8,
+        saturationBoost: 8
       };
     }
-    if (lumPct > 84) {
+    if (lumPct > 82) {
       return {
         luminance: lumPct,
         status: 'BRIGHT',
-        label: 'AI Highlight Guard',
-        boostNeeded: -10
+        label: 'Auto-Highlight Guard',
+        boostNeeded: -6,
+        contrastBoost: 4,
+        saturationBoost: 4
       };
     }
+
+    const gentleBoost = Math.max(8, Math.min(24, Math.round(deficit * 0.85)));
     return {
       luminance: lumPct,
       status: 'OPTIMAL',
-      label: 'AI Studio Portrait Ready',
-      boostNeeded: 6
+      label: 'AF • Studio Light Terkunci',
+      boostNeeded: gentleBoost,
+      contrastBoost: 6,
+      saturationBoost: 6
     };
   } catch (e) {
     return {
       luminance: 65,
       status: 'OPTIMAL',
-      label: 'AI Studio Portrait Ready',
-      boostNeeded: 0
+      label: 'AF • Studio Light Aktif',
+      boostNeeded: 12,
+      contrastBoost: 6,
+      saturationBoost: 6
     };
   }
 }
 
-// Intelligent Camera ISP: Runs on captured/uploaded photo canvas to make phone/webcam shots look studio-grade
+// 5-Stage Computational Photography ISP
+// Makes even low-end/dark/blurry webcams and budget phone cameras look like a bright, sharp Korean studio camera
 export function processIntelligentCapture(ctx, width, height, options = {}) {
   if (!ctx || !width || !height) return;
   const {
     autoTone = true,
     skinSmooth = true,
-    studioLight = true
+    studioLight = true,
+    autoFocusSharpen = true,
+    focusPoint = { x: 0.5, y: 0.45 }
   } = options;
 
-  // 1. Adaptive Auto-Exposure, Shadow Lift & Creamy Skin Tone Curve
+  // STAGE 1 & 2: Auto White Balance (AWB) + Adaptive Shadow-Lift HDR Tone Mapping
   if (autoTone) {
     try {
       const imgData = ctx.getImageData(0, 0, width, height);
       const data = imgData.data;
 
-      // Sample average luminance fast (every 16th pixel)
+      let sumR = 0;
+      let sumG = 0;
+      let sumB = 0;
       let sumLum = 0;
-      let count = 0;
-      for (let i = 0; i < data.length; i += 64) {
-        sumLum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-        count++;
-      }
-      const avgLum = count > 0 ? sumLum / count : 128;
+      let focusLum = 0;
+      let focusCount = 0;
+      let sampleCount = 0;
 
-      // Compute adaptive gamma (< 1 lifts dark shadows cleanly without clipping white)
-      let gamma = 1.0;
-      if (avgLum < 125) {
-        gamma = Math.max(0.74, 1 - ((125 - avgLum) / 125) * 0.26);
-      } else if (avgLum > 185) {
-        gamma = 1.06;
-      } else {
-        gamma = 0.93; // Slight studio lift
+      const fx = Math.round((focusPoint?.x ?? 0.5) * width);
+      const fy = Math.round((focusPoint?.y ?? 0.45) * height);
+      const rx = Math.round(width * 0.25);
+      const ry = Math.round(height * 0.25);
+
+      // Fast strided sampling across the frame
+      const step = 4 * 12;
+      for (let i = 0; i < data.length; i += step) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+
+        // Ignore extreme clipped pixels for white balance calculation
+        if (lum > 18 && lum < 242) {
+          sumR += r;
+          sumG += g;
+          sumB += b;
+          sampleCount++;
+        }
+        sumLum += lum;
+
+        const pxIdx = i / 4;
+        const x = pxIdx % width;
+        const y = Math.floor(pxIdx / width);
+        if (Math.abs(x - fx) <= rx && Math.abs(y - fy) <= ry) {
+          focusLum += lum;
+          focusCount++;
+        }
       }
 
-      // Build 256-entry LUT for ultra-fast filmic S-curve + shadow lift
+      const totalSamples = Math.max(1, Math.floor(data.length / step));
+      const avgLum = sumLum / totalSamples;
+      const subjectLum = focusCount > 0 ? focusLum / focusCount : avgLum;
+
+      // Gray-World Auto White Balance with subtle warm studio portrait bias (removes green/yellow webcam cast)
+      let gainR = 1.02;
+      let gainG = 1.0;
+      let gainB = 1.01;
+      if (sampleCount > 50) {
+        const avgR = sumR / sampleCount;
+        const avgG = sumG / sampleCount;
+        const avgB = sumB / sampleCount;
+        const gray = (avgR + avgG + avgB) / 3;
+        // Clamp AWB correction to +/- 14% so intentional lighting isn't destroyed, but ugly webcam casts vanish
+        gainR = Math.min(1.16, Math.max(0.92, (gray / Math.max(1, avgR)) * 1.03));
+        gainG = Math.min(1.08, Math.max(0.93, (gray / Math.max(1, avgG)) * 0.99));
+        gainB = Math.min(1.15, Math.max(0.90, (gray / Math.max(1, avgB)) * 1.01));
+      }
+
+      // Adaptive Gamma to lift dark/muddy faces up to studio brightness (~165/255)
+      let gamma = 0.88;
+      if (subjectLum < 145) {
+        // Stronger shadow lift for dark cameras (down to gamma 0.58 for very dark rooms)
+        gamma = Math.max(0.58, 0.92 - ((145 - subjectLum) / 145) * 0.36);
+      } else if (subjectLum > 190) {
+        gamma = 1.04;
+      }
+
+      // Build 256-entry per-channel LUT with shadow lift, filmic S-curve, and highlight protection
       const lutR = new Uint8ClampedArray(256);
       const lutG = new Uint8ClampedArray(256);
       const lutB = new Uint8ClampedArray(256);
 
       for (let v = 0; v < 256; v++) {
-        // Normalized 0..1 with gamma lift
-        let norm = Math.pow(v / 255, gamma);
-        // Gentle filmic S-curve for crisp studio pop
-        norm = norm * norm * (3 - 2 * norm) * 0.22 + norm * 0.78;
-        // Soft highlight roll-off above 235
+        // Lift black floor slightly so cheap camera crushed blacks become clean
+        const lifted = Math.max(0, (v - 4) / 251);
+        let norm = Math.pow(lifted, gamma);
+        // Studio contrast S-curve
+        const sCurve = norm * norm * (3 - 2 * norm);
+        norm = sCurve * 0.28 + norm * 0.72;
         const base = Math.min(255, Math.max(0, norm * 255));
 
-        // Subtle Korean studio skin-tone balance (slight warm rose lift in midtones)
-        const midWeight = Math.sin((v / 255) * Math.PI);
-        lutR[v] = Math.min(255, base + midWeight * 5);
-        lutG[v] = Math.min(255, base + midWeight * 2);
-        lutB[v] = Math.min(255, base + midWeight * 3);
+        const midTone = Math.sin((v / 255) * Math.PI);
+        lutR[v] = Math.min(255, Math.max(0, base * gainR + midTone * 6));
+        lutG[v] = Math.min(255, Math.max(0, base * gainG + midTone * 2));
+        lutB[v] = Math.min(255, Math.max(0, base * gainB + midTone * 4));
       }
 
       for (let i = 0; i < data.length; i += 4) {
@@ -337,46 +416,92 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
     }
   }
 
-  // 2. Intelligent Dual-Pass Portrait Skin Smoothing (Softens skin noise while keeping eyes sharp)
+  // STAGE 3: Sensor Chroma Noise Reduction & Studio Skin Smoothing
   if (skinSmooth) {
     try {
       const offCanvas = document.createElement('canvas');
-      offCanvas.width = Math.max(1, Math.round(width * 0.5));
-      offCanvas.height = Math.max(1, Math.round(height * 0.5));
+      offCanvas.width = Math.max(1, Math.round(width * 0.45));
+      offCanvas.height = Math.max(1, Math.round(height * 0.45));
       const offCtx = offCanvas.getContext('2d');
       offCtx.drawImage(ctx.canvas, 0, 0, offCanvas.width, offCanvas.height);
 
+      // Soften blotchy webcam noise and lift skin glow
       ctx.save();
       ctx.globalCompositeOperation = 'screen';
       try {
-        ctx.filter = `blur(${Math.max(2, Math.round(width * 0.008))}px)`;
+        ctx.filter = `blur(${Math.max(2, Math.round(width * 0.007))}px)`;
       } catch (e) {}
-      ctx.globalAlpha = 0.16;
+      ctx.globalAlpha = 0.18;
       ctx.drawImage(offCanvas, 0, 0, width, height);
       ctx.restore();
 
       ctx.save();
       ctx.globalCompositeOperation = 'soft-light';
-      ctx.globalAlpha = 0.22;
+      ctx.globalAlpha = 0.24;
       ctx.drawImage(offCanvas, 0, 0, width, height);
       ctx.restore();
     } catch (e) {}
   }
 
-  // 3. 3D Studio Key Light Relighting (Subject center pop & subtle studio edge shaping)
+  // STAGE 4: Optical Auto-Focus Clarity & Edge Sharpening (Fixes blurry laptop/front cameras)
+  if (autoFocusSharpen) {
+    try {
+      // Fast 3x3 Unsharp Mask on luminance edges to make eyes, lashes, and hair crisp
+      const srcData = ctx.getImageData(0, 0, width, height);
+      const src = srcData.data;
+      const outData = ctx.createImageData(width, height);
+      const dst = outData.data;
+
+      const amount = 0.42; // Crisp studio focus strength without haloing
+      const w4 = width * 4;
+
+      for (let y = 0; y < height; y++) {
+        const yOffset = y * w4;
+        const isEdgeY = y === 0 || y === height - 1;
+        for (let x = 0; x < width; x++) {
+          const idx = yOffset + x * 4;
+          if (isEdgeY || x === 0 || x === width - 1) {
+            dst[idx] = src[idx];
+            dst[idx + 1] = src[idx + 1];
+            dst[idx + 2] = src[idx + 2];
+            dst[idx + 3] = src[idx + 3];
+            continue;
+          }
+
+          // 4-neighbor Laplacian high-pass filter
+          for (let c = 0; c < 3; c++) {
+            const center = src[idx + c];
+            const blur =
+              (src[idx - w4 + c] +
+                src[idx + w4 + c] +
+                src[idx - 4 + c] +
+                src[idx + 4 + c]) *
+              0.25;
+            const diff = center - blur;
+            // Threshold tiny sensor noise (< 3 levels) so we only sharpen real features (eyes/hair/lips), not grain!
+            const edge = Math.abs(diff) > 3 ? diff * amount : 0;
+            dst[idx + c] = Math.min(255, Math.max(0, Math.round(center + edge)));
+          }
+          dst[idx + 3] = src[idx + 3];
+        }
+      }
+      ctx.putImageData(outData, 0, 0);
+    } catch (e) {}
+  }
+
+  // STAGE 5: 3D Studio Softbox Key Light Relighting
   if (studioLight) {
     try {
       ctx.save();
-      const cx = width * 0.5;
-      const cy = height * 0.45;
-      const radius = Math.max(width, height) * 0.65;
+      const cx = width * (focusPoint?.x ?? 0.5);
+      const cy = height * (focusPoint?.y ?? 0.45);
+      const radius = Math.max(width, height) * 0.68;
 
-      // Soft warm studio fill on face center
       ctx.globalCompositeOperation = 'soft-light';
-      const keyGrad = ctx.createRadialGradient(cx, cy, radius * 0.05, cx, cy, radius);
-      keyGrad.addColorStop(0, 'rgba(255, 245, 240, 0.32)');
-      keyGrad.addColorStop(0.6, 'rgba(255, 245, 240, 0.08)');
-      keyGrad.addColorStop(1, 'rgba(15, 10, 15, 0.18)');
+      const keyGrad = ctx.createRadialGradient(cx, cy, radius * 0.04, cx, cy, radius);
+      keyGrad.addColorStop(0, 'rgba(255, 248, 244, 0.36)');
+      keyGrad.addColorStop(0.55, 'rgba(255, 245, 240, 0.12)');
+      keyGrad.addColorStop(1, 'rgba(12, 10, 14, 0.16)');
       ctx.fillStyle = keyGrad;
       ctx.fillRect(0, 0, width, height);
       ctx.restore();
