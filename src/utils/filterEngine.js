@@ -186,25 +186,27 @@ export const DEFAULT_FILTER_SETTINGS = {
 const DEFAULT_TABLE = '0 0.063 0.125 0.188 0.25 0.313 0.375 0.438 0.5 0.563 0.625 0.688 0.75 0.813 0.875 0.938 1';
 const IDENTITY_COLOR_MATRIX = '1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0';
 
-// Smooth, bounded-slope (max derivative <= 1.50) tone curve:
-// - When fogRatio == 0 (clean iPhone/smartphone camera where p03 <= 32):
-//   Preserves 100% native blacks and highlights, applying only a gentle gamma nudge if the face is dark/bright.
-// - When fogRatio > 0 (foggy laptop webcam under ceiling light where p03 > 32):
-//   Deepens foggy gray hair (0.32 -> 0.23), gently lifts shadowed face skin (0.45 -> 0.51),
-//   and HOLDS bright office background walls (0.80 -> 0.82) so backgrounds NEVER blow out to white
-//   and skin shadows NEVER split into yellow/orange!
-const WEBCAM_XP = [0.0, 0.18, 0.32, 0.42, 0.52, 0.65, 0.80, 1.0];
-const WEBCAM_YP = [0.0, 0.08, 0.23, 0.44, 0.59, 0.72, 0.83, 0.98];
+function isMobileCameraDevice() {
+  return (
+    typeof navigator !== 'undefined' &&
+    (/iPad|iPhone|iPod|Android/i.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1))
+  );
+}
+
+// Smooth, bounded-slope tone curve for Foggy Laptop Webcams:
+// Pulls the milky white ceiling-glare veil DOWN (0.32 -> 0.20, 0.44 -> 0.38, 0.55 -> 0.52, 0.85 -> 0.81)
+// so the image has rich dark hair, warm natural tan skin (NEVER bleached white!), and controlled office walls.
+const WEBCAM_XP = [0.0, 0.18, 0.32, 0.44, 0.55, 0.70, 0.85, 1.0];
+const WEBCAM_YP = [0.0, 0.07, 0.20, 0.38, 0.52, 0.67, 0.81, 0.96];
 
 function evalBoundedDehazeCurve(normX, fogRatio, gammaClean = 1.0, userExpOffset = 0) {
   const x = Math.min(1, Math.max(0, normX));
   if (x <= 0) return 0;
   if (x >= 1) return 1;
 
-  // Clean camera curve (gentle gamma)
   const yClean = Math.pow(x, gammaClean);
 
-  // Piecewise linear interpolation on the bounded-slope webcam dehaze & highlight-hold curve
   let yWebcam = x;
   for (let k = 0; k < WEBCAM_XP.length - 1; k++) {
     const x0 = WEBCAM_XP[k];
@@ -218,7 +220,6 @@ function evalBoundedDehazeCurve(normX, fogRatio, gammaClean = 1.0, userExpOffset
 
   let y = yClean * (1 - fogRatio) + yWebcam * fogRatio;
   if (Math.abs(userExpOffset) > 0.001) {
-    // Apply manual exposure slider smoothly in midtones without clipping black or white
     y += userExpOffset * 4 * x * (1 - x);
   }
   return Math.min(1, Math.max(0, y));
@@ -234,10 +235,10 @@ function buildNeutralSvgTable(fogRatio, gammaClean, userExpOffset) {
   return pts.join(' ');
 }
 
-// Builds a Row-Sum = 1.0 3x3 Color Matrix (plus SVG 4x5 string) that:
-// 1. Is 100% neutral-preserving: M * [v, v, v]^T = [v, v, v]^T for all v (black hair, gray shadows, white shirts & walls never get tinted!).
-// 2. Cancels per-channel S-curve chroma inflation (s = 1 - 0.24 * fogRatio).
-// 3. Neutralizes fluorescent webcam yellow-green skin cast (where G > B) by damping excess G and lifting B proportionally to (G - B).
+// Row-Sum = 1.0 Anti-Yellow Color Matrix:
+// 1. 100% neutral-preserving on gray/black/white: M * [v, v, v]^T = [v, v, v]^T
+// 2. Preserves warm natural skin saturation (s = 0.88 at full fog, never pale/ashy white)
+// 3. Neutralizes fluorescent green-yellow cast (where G > B) without shifting red or bleaching skin
 function buildAntiYellowColorMatrix(fogRatio, yellowStrength = 1.0) {
   const f = Math.min(1, Math.max(0, fogRatio));
   if (f < 0.02) {
@@ -247,7 +248,7 @@ function buildAntiYellowColorMatrix(fogRatio, yellowStrength = 1.0) {
     };
   }
 
-  const s = 1.0 - f * 0.24; // 0.76 at full webcam fog
+  const s = 1.0 - f * 0.12; // 0.88 at full webcam fog
   const lr = 0.2126;
   const lg = 0.7152;
   const lb = 0.0722;
@@ -262,11 +263,10 @@ function buildAntiYellowColorMatrix(fogRatio, yellowStrength = 1.0) {
   const s21 = lg * (1 - s);
   const s22 = lb * (1 - s) + s;
 
-  const yScale = Math.min(1.25, Math.max(0.5, yellowStrength));
-  const kG = f * 0.15 * yScale;
-  const kB = f * 0.32 * yScale;
+  const yScale = Math.min(1.2, Math.max(0.5, yellowStrength));
+  const kG = f * 0.12 * yScale;
+  const kB = f * 0.22 * yScale;
 
-  // M = Mantiyellow * Msat where Mantiyellow = [[1, 0, 0], [0, 1-kG, kG], [0, kB, 1-kB]]
   const m00 = s00;
   const m01 = s01;
   const m02 = s02;
@@ -392,14 +392,16 @@ export function analyzeVideoScene(
     const rawYellowExcess = Math.max(0, avgG - avgB);
 
     if (!smoothedState) {
-      smoothedState = { p03, faceLum: detectedFaceLum, yellowExcess: rawYellowExcess };
+      smoothedState = { p03, avgLum, faceLum: detectedFaceLum, yellowExcess: rawYellowExcess };
     } else {
       smoothedState.p03 = smoothedState.p03 * 0.65 + p03 * 0.35;
+      smoothedState.avgLum = smoothedState.avgLum * 0.65 + avgLum * 0.35;
       smoothedState.faceLum = smoothedState.faceLum * 0.6 + detectedFaceLum * 0.4;
       smoothedState.yellowExcess = smoothedState.yellowExcess * 0.65 + rawYellowExcess * 0.35;
     }
 
     const sp03 = smoothedState.p03;
+    const sAvgLum = smoothedState.avgLum;
     const sFaceLum = smoothedState.faceLum;
     const sYellowExcess = smoothedState.yellowExcess;
 
@@ -425,37 +427,50 @@ export function analyzeVideoScene(
       };
     }
 
-    // Foggy Laptop Webcam Detection (sp03 > 32 indicates optical glare lifting black floor)
-    const fogRatio = autoEnabled
-      ? Math.min(1, Math.max(0, (sp03 - 30) / 42) + userDehaze / 40)
-      : Math.min(1, userDehaze / 30);
-    const isFoggyWebcam = fogRatio > 0.12;
+    const isMobile = isMobileCameraDevice();
 
-    // For clean cameras (iPhone, fogRatio == 0), compute gentle gamma if face is dark or overly bright
-    const normFace = Math.min(0.85, Math.max(0.15, sFaceLum / 255));
-    const targetClean = Math.min(0.64, Math.max(0.48, normFace * 0.6 + 0.56 * 0.4));
-    const gammaClean = Math.min(1.22, Math.max(0.82, Math.log(targetClean) / Math.log(normFace)));
+    // Foggy Laptop Webcam Detection ONLY on desktop/laptop webcams (NEVER on iPhone/Android!)
+    const fogRatio = isMobile
+      ? 0
+      : autoEnabled
+      ? Math.min(1, Math.max(0, (sp03 - 35) / 40) + userDehaze / 40)
+      : Math.min(1, userDehaze / 30);
+    const isFoggyWebcam = fogRatio > 0.15;
+
+    // On clean/mobile cameras, only lift exposure if the room is genuinely dark (sAvgLum < 90 and sFaceLum < 85).
+    // Never lift exposure in a bright office (sAvgLum >= 90), which previously made iPhone photos look pale white!
+    let gammaClean = 1.0;
+    if (autoEnabled && !isFoggyWebcam) {
+      if (sAvgLum < 90 && sFaceLum < 85) {
+        const darkness = (85 - sFaceLum) / 85;
+        gammaClean = Math.max(0.84, 1.0 - darkness * 0.25);
+      } else if (sFaceLum > 175) {
+        gammaClean = Math.min(1.14, 1.0 + ((sFaceLum - 175) / 80) * 0.18);
+      }
+    }
 
     const userExpOffset = (userExp / 25) * 0.14;
     const neutralTable = buildNeutralSvgTable(fogRatio, gammaClean, userExpOffset);
 
-    // Yellow fluorescent cast strength (around 1.0 when G - B >= 8)
     const yellowStrength = Math.min(1.2, Math.max(0.5, sYellowExcess / 8));
     const { svgString: colorMatrix } = buildAntiYellowColorMatrix(fogRatio, yellowStrength);
 
+    const normFace = Math.min(0.85, Math.max(0.15, sFaceLum / 255));
     const outFace = evalBoundedDehazeCurve(normFace, fogRatio, gammaClean, userExpOffset) * 255;
-    const boostNeeded = Math.min(24, Math.max(-14, Math.round(((outFace - sFaceLum) / 255) * 100)));
+    const boostNeeded = isMobile
+      ? Math.min(12, Math.max(-10, Math.round(((outFace - sFaceLum) / 255) * 100)))
+      : 0;
     const lumPct = Math.round((sFaceLum / 255) * 100);
 
     let status = 'OPTIMAL';
     let label = 'AF • Kamera Natural HD';
-    if (fogRatio > 0.25) {
-      status = 'BRIGHT';
+    if (isFoggyWebcam) {
+      status = 'OPTIMAL';
       label = 'AF • Anti-Kabut & Warna Natural Aktif';
-    } else if (sFaceLum < 105) {
+    } else if (sAvgLum < 90 && sFaceLum < 85) {
       status = 'LOW_LIGHT';
       label = 'AF • Pencerah Cahaya Natural';
-    } else if (sFaceLum > 172) {
+    } else if (sFaceLum > 175) {
       status = 'BRIGHT';
       label = 'AF • Peredam Silau Natural';
     }
@@ -495,8 +510,8 @@ export function analyzeVideoScene(
 }
 
 // Adaptive Dual-Path Computational ISP for Captured Photos:
-// - Path A (Clean Smartphone / iPhone Camera, p03 <= 32): Non-destructive, color-true gentle exposure.
-// - Path B (Foggy Laptop Webcam with Ceiling Glare, p03 > 32): Subtle top-glare balancing + bounded-slope dehaze curve + Row-Sum-1 Anti-Yellow Matrix.
+// - Path A (Smartphone / iPhone Camera): 100% faithful to live camera preview (never bleaches or whitens bright-room shots!).
+// - Path B (Foggy Laptop Webcam): Applies the exact same white-veil removal curve & Row-Sum-1 Anti-Yellow Matrix as the live preview.
 export function processIntelligentCapture(ctx, width, height, options = {}) {
   if (!ctx || !width || !height) return;
   const {
@@ -514,23 +529,6 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
   }
 
   try {
-    const gridW = 32;
-    const gridH = 24;
-    const smallCanvas = document.createElement('canvas');
-    smallCanvas.width = gridW;
-    smallCanvas.height = gridH;
-    const smallCtx = smallCanvas.getContext('2d', { willReadFrequently: true });
-    try {
-      smallCtx.filter = 'blur(4px)';
-    } catch (e) {}
-    smallCtx.drawImage(ctx.canvas, 0, 0, gridW, gridH);
-    const smallData = smallCtx.getImageData(0, 0, gridW, gridH).data;
-    const illumGrid = new Float32Array(gridW * gridH);
-    for (let idx = 0; idx < gridW * gridH; idx++) {
-      const si = idx * 4;
-      illumGrid[idx] = (0.299 * smallData[si] + 0.587 * smallData[si + 1] + 0.114 * smallData[si + 2]) / 255;
-    }
-
     const imgData = ctx.getImageData(0, 0, width, height);
     const data = imgData.data;
 
@@ -597,16 +595,28 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
         ? midFocusLum / midFocusCount
         : rawFocusLum;
 
-    const fogRatio = autoEnabled
-      ? Math.min(1, Math.max(0, (p03 - 30) / 42) + userDehaze / 40)
+    const isMobile = isMobileCameraDevice();
+    const fogRatio = isMobile
+      ? 0
+      : autoEnabled
+      ? Math.min(1, Math.max(0, (p03 - 35) / 40) + userDehaze / 40)
       : Math.min(1, userDehaze / 30);
+    const isFoggyWebcam = fogRatio > 0.15;
 
-    const normFace = Math.min(0.85, Math.max(0.15, faceLum / 255));
-    const targetClean = Math.min(0.64, Math.max(0.48, normFace * 0.6 + 0.56 * 0.4));
-    const gammaClean = Math.min(1.22, Math.max(0.82, Math.log(targetClean) / Math.log(normFace)));
+    let gammaClean = 1.0;
+    if (autoEnabled && !isFoggyWebcam) {
+      if (avgLum < 90 && faceLum < 85) {
+        const darkness = (85 - faceLum) / 85;
+        gammaClean = Math.max(0.84, 1.0 - darkness * 0.25);
+      } else if (faceLum > 175) {
+        gammaClean = Math.min(1.14, 1.0 + ((faceLum - 175) / 80) * 0.18);
+      }
+    }
+
     const userExpOffset = (userExp / 25) * 0.14;
 
-    if (fogRatio < 0.03 && Math.abs(gammaClean - 1.0) < 0.04 && userExp === 0) {
+    // On iPhone/Android in normal or bright rooms with no manual exposure change, keep 100% pure native pixels!
+    if (fogRatio < 0.02 && Math.abs(gammaClean - 1.0) < 0.02 && userExp === 0) {
       return;
     }
 
@@ -621,37 +631,14 @@ export function processIntelligentCapture(ctx, width, height, options = {}) {
     const yellowStrength = Math.min(1.2, Math.max(0.5, yellowExcess / 8));
     const { m } = buildAntiYellowColorMatrix(fogRatio, yellowStrength);
 
-    const spatialGlareStrength = fogRatio * 0.15;
+    for (let i = 0; i < data.length; i += 4) {
+      const r1 = lut[data[i]];
+      const g1 = lut[data[i + 1]];
+      const b1 = lut[data[i + 2]];
 
-    for (let y = 0; y < height; y++) {
-      const gy = Math.min(gridH - 1, Math.floor((y / height) * gridH));
-      const rowOffset = y * width * 4;
-      for (let x = 0; x < width; x++) {
-        const i = rowOffset + x * 4;
-        let r = data[i];
-        let g = data[i + 1];
-        let b = data[i + 2];
-
-        if (spatialGlareStrength > 0.01) {
-          const gx = Math.min(gridW - 1, Math.floor((x / width) * gridW));
-          const localIllum = illumGrid[gy * gridW + gx];
-          if (localIllum > 0.62) {
-            const excess = (localIllum - 0.62) * spatialGlareStrength * 255;
-            const scale = 1 / Math.max(0.75, 1 - (localIllum - 0.62) * spatialGlareStrength * 0.5);
-            r = Math.min(255, Math.max(0, Math.round((r - excess) * scale)));
-            g = Math.min(255, Math.max(0, Math.round((g - excess) * scale)));
-            b = Math.min(255, Math.max(0, Math.round((b - excess) * scale)));
-          }
-        }
-
-        const r1 = lut[r];
-        const g1 = lut[g];
-        const b1 = lut[b];
-
-        data[i] = Math.min(255, Math.max(0, Math.round(r1 * m[0] + g1 * m[1] + b1 * m[2])));
-        data[i + 1] = Math.min(255, Math.max(0, Math.round(r1 * m[3] + g1 * m[4] + b1 * m[5])));
-        data[i + 2] = Math.min(255, Math.max(0, Math.round(r1 * m[6] + g1 * m[7] + b1 * m[8])));
-      }
+      data[i] = Math.min(255, Math.max(0, Math.round(r1 * m[0] + g1 * m[1] + b1 * m[2])));
+      data[i + 1] = Math.min(255, Math.max(0, Math.round(r1 * m[3] + g1 * m[4] + b1 * m[5])));
+      data[i + 2] = Math.min(255, Math.max(0, Math.round(r1 * m[6] + g1 * m[7] + b1 * m[8])));
     }
 
     ctx.putImageData(imgData, 0, 0);
