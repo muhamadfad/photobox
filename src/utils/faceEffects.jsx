@@ -97,19 +97,26 @@ export async function detectFaceInVideo(video) {
 
     if (count > 25) {
       const avgX = (sumX / count) / sw;
-      const avgY = (sumY / count) / sh;
-      const clusterW = Math.max(0.18, Math.min(0.35, ((maxX - minX) / sw) * 1.05));
-      const clusterH = Math.max(0.24, Math.min(0.46, ((maxY - minY) / sh) * 1.05));
-      const top = minY / sh;
-      const bottom = maxY / sh;
+      const rawW = ((maxX - minX) / sw);
+      const skinTop = minY / sh; // Top-most skin pixel (forehead/eyebrow level)
+
+      // Anatomical human head dimensions (width : height ≈ 1 : 1.45)
+      const headW = Math.max(0.32, Math.min(0.44, rawW * 1.15));
+      const headH = headW * 1.45;
+      // Head top (hair crown) is above forehead/brows
+      const headTop = Math.max(0.08, skinTop - headW * 0.38);
+      const chinBottom = headTop + headH;
+      const headCy = Math.max(0.36, Math.min(0.48, (headTop + chinBottom) * 0.5));
+      const clampedCx = Math.max(0.20, Math.min(0.80, avgX));
+
       return {
-        cx: avgX,
-        cy: avgY,
-        fw: clusterW,
-        fh: clusterH,
-        top,
-        bottom,
-        confidence: 0.8
+        cx: clampedCx,
+        cy: headCy,
+        fw: headW,
+        fh: headH,
+        top: headTop,
+        bottom: chinBottom,
+        confidence: 0.85
       };
     }
   } catch (e) {}
@@ -644,19 +651,18 @@ function drawCanvasBow(ctx, x, y, size, color = '#f472b6') {
 export function renderFaceEffectToCanvas(ctx, width, height, effectId, anchor = {}) {
   if (!effectId || effectId === 'none') return;
 
-  const cx = (anchor.cx ?? 0.5) * width;
-  const cy = (anchor.cy ?? 0.60) * height;
-  const fw = (anchor.fw ?? 0.24) * width;
-  const fh = (anchor.fh ?? 0.32) * height;
-  const topY = anchor.top != null ? anchor.top * height : (cy - fh * 0.5);
+  const cx = (anchor.cx ?? 0.50) * width;
+  const cy = (anchor.cy ?? 0.43) * height;
+  const fw = (anchor.fw ?? 0.36) * width;
+  const fh = (anchor.fh ?? 0.54) * height;
 
-  const headTopY = topY - fh * 0.12;
-  const hairlineY = topY + fh * 0.04;
-  const eyesY = topY + fh * 0.38;
-  const cheeksY = topY + fh * 0.58;
-  const leftCheekX = cx - fw * 0.26;
-  const rightCheekX = cx + fw * 0.26;
-  const noseY = topY + fh * 0.68;
+  const headTopY = cy - fh * 0.50;
+  const hairlineY = cy - fh * 0.35;
+  const eyesY = cy - fh * 0.11;
+  const cheeksY = cy + fh * 0.04;
+  const leftCheekX = cx - fw * 0.28;
+  const rightCheekX = cx + fw * 0.28;
+  const noseY = cy + fh * 0.15;
   const leftCheekY = cheeksY;
   const rightCheekY = cheeksY;
 
@@ -669,43 +675,37 @@ export function renderFaceEffectToCanvas(ctx, width, height, effectId, anchor = 
       drawCanvasBlush(ctx, leftCheekX, leftCheekY, blushR, blushR * 0.7, 'rgba(251, 113, 133, 0.28)');
       drawCanvasBlush(ctx, rightCheekX, rightCheekY, blushR, blushR * 0.7, 'rgba(251, 113, 133, 0.28)');
 
-      drawCanvasButterfly(ctx, cx, headTopY - fh * 0.12, fw * 0.28, -0.08, {
+      // Head butterflies dancing above hair
+      drawCanvasButterfly(ctx, cx, headTopY - fh * 0.04, fw * 0.24, -0.06, {
         wingTop: '#38bdf8',
         wingBottom: '#0284c7',
         wingHighlight: '#bae6fd'
       });
-      drawCanvasButterfly(ctx, cx - fw * 0.38, headTopY - fh * 0.04, fw * 0.23, -0.28, {
+      drawCanvasButterfly(ctx, cx - fw * 0.26, headTopY + fh * 0.02, fw * 0.20, -0.22, {
         wingTop: '#60a5fa',
         wingBottom: '#2563eb',
         wingHighlight: '#dbeafe'
       });
-      drawCanvasButterfly(ctx, cx + fw * 0.36, headTopY - fh * 0.06, fw * 0.22, 0.24, {
+      drawCanvasButterfly(ctx, cx + fw * 0.26, headTopY + fh * 0.01, fw * 0.19, 0.20, {
         wingTop: '#818cf8',
         wingBottom: '#4f46e5',
         wingHighlight: '#e0e7ff'
       });
 
       // Butterfly on left cheek
-      drawCanvasButterfly(ctx, leftCheekX - fw * 0.04, leftCheekY, fw * 0.24, -0.15, {
+      drawCanvasButterfly(ctx, leftCheekX, leftCheekY, fw * 0.22, -0.15, {
         wingTop: '#38bdf8',
         wingBottom: '#0369a1',
         wingHighlight: '#e0f2fe'
       });
 
-      drawCanvasButterfly(ctx, rightCheekX + fw * 0.16, rightCheekY + fh * 0.12, fw * 0.16, 0.35, {
-        wingTop: '#93c5fd',
-        wingBottom: '#3b82f6',
-        wingHighlight: '#eff6ff'
-      });
-
       const sparkleColor = '#fef08a';
-      drawCanvasSparkle(ctx, cx - fw * 0.18, headTopY - fh * 0.18, fw * 0.045, sparkleColor);
-      drawCanvasSparkle(ctx, cx + fw * 0.20, headTopY - fh * 0.16, fw * 0.05, sparkleColor);
-      drawCanvasSparkle(ctx, cx, headTopY - fh * 0.28, fw * 0.06, '#ffffff');
-      drawCanvasSparkle(ctx, leftCheekX + fw * 0.12, leftCheekY - fh * 0.08, fw * 0.04, sparkleColor);
-      drawCanvasSparkle(ctx, rightCheekX - fw * 0.12, rightCheekY - fh * 0.08, fw * 0.04, sparkleColor);
-      drawCanvasSparkle(ctx, cx, noseY, fw * 0.035, '#ffffff');
-      drawCanvasSparkle(ctx, leftCheekX - fw * 0.18, leftCheekY + fh * 0.14, fw * 0.035, sparkleColor);
+      drawCanvasSparkle(ctx, cx - fw * 0.15, headTopY - fh * 0.08, fw * 0.04, sparkleColor);
+      drawCanvasSparkle(ctx, cx + fw * 0.18, headTopY - fh * 0.06, fw * 0.045, sparkleColor);
+      drawCanvasSparkle(ctx, cx, hairlineY - fh * 0.04, fw * 0.05, '#ffffff');
+      drawCanvasSparkle(ctx, leftCheekX + fw * 0.10, leftCheekY - fh * 0.05, fw * 0.035, sparkleColor);
+      drawCanvasSparkle(ctx, rightCheekX - fw * 0.10, rightCheekY - fh * 0.05, fw * 0.035, sparkleColor);
+      drawCanvasSparkle(ctx, cx, noseY, fw * 0.03, '#ffffff');
       break;
     }
 
@@ -714,34 +714,34 @@ export function renderFaceEffectToCanvas(ctx, width, height, effectId, anchor = 
       drawCanvasBlush(ctx, leftCheekX, leftCheekY, fw * 0.22, fw * 0.15, 'rgba(245, 158, 11, 0.25)');
       drawCanvasBlush(ctx, rightCheekX, rightCheekY, fw * 0.22, fw * 0.15, 'rgba(245, 158, 11, 0.25)');
 
-      drawCanvasButterfly(ctx, cx, headTopY - fh * 0.14, fw * 0.3, -0.05, {
+      drawCanvasButterfly(ctx, cx, headTopY - fh * 0.04, fw * 0.26, -0.05, {
         wingTop: '#fbbf24',
         wingBottom: '#d97706',
         wingHighlight: '#fef08a'
       });
-      drawCanvasButterfly(ctx, cx - fw * 0.38, headTopY - fh * 0.05, fw * 0.24, -0.3, {
+      drawCanvasButterfly(ctx, cx - fw * 0.26, headTopY + fh * 0.02, fw * 0.21, -0.25, {
         wingTop: '#f59e0b',
         wingBottom: '#b45309',
         wingHighlight: '#fde68a'
       });
-      drawCanvasButterfly(ctx, cx + fw * 0.36, headTopY - fh * 0.06, fw * 0.22, 0.25, {
+      drawCanvasButterfly(ctx, cx + fw * 0.26, headTopY + fh * 0.01, fw * 0.20, 0.22, {
         wingTop: '#fcd34d',
         wingBottom: '#d97706',
         wingHighlight: '#fef3c7'
       });
 
       // Butterfly on left cheek
-      drawCanvasButterfly(ctx, leftCheekX, leftCheekY, fw * 0.24, -0.2, {
+      drawCanvasButterfly(ctx, leftCheekX, leftCheekY, fw * 0.22, -0.15, {
         wingTop: '#fbbf24',
         wingBottom: '#b45309',
         wingHighlight: '#fef08a'
       });
 
-      drawCanvasSparkle(ctx, cx, headTopY - fh * 0.25, fw * 0.07, '#fef08a');
-      drawCanvasSparkle(ctx, cx - fw * 0.2, headTopY - fh * 0.15, fw * 0.05, '#f59e0b');
-      drawCanvasSparkle(ctx, cx + fw * 0.2, headTopY - fh * 0.15, fw * 0.05, '#f59e0b');
-      drawCanvasSparkle(ctx, leftCheekX - fw * 0.1, leftCheekY + fh * 0.1, fw * 0.04, '#fde68a');
-      drawCanvasSparkle(ctx, rightCheekX + fw * 0.1, rightCheekY - fh * 0.1, fw * 0.04, '#fde68a');
+      drawCanvasSparkle(ctx, cx, headTopY - fh * 0.08, fw * 0.05, '#fef08a');
+      drawCanvasSparkle(ctx, cx - fw * 0.18, headTopY - fh * 0.04, fw * 0.04, '#f59e0b');
+      drawCanvasSparkle(ctx, cx + fw * 0.18, headTopY - fh * 0.04, fw * 0.04, '#f59e0b');
+      drawCanvasSparkle(ctx, leftCheekX + fw * 0.10, leftCheekY - fh * 0.05, fw * 0.035, '#fde68a');
+      drawCanvasSparkle(ctx, rightCheekX - fw * 0.10, rightCheekY - fh * 0.05, fw * 0.035, '#fde68a');
       break;
     }
 
@@ -1496,19 +1496,18 @@ export function renderFaceEffectToCanvas(ctx, width, height, effectId, anchor = 
 export function FaceEffectOverlay({ effectId, anchor = {}, isMirrored = true }) {
   if (!effectId || effectId === 'none') return null;
 
-  const cx = (anchor.cx ?? 0.5) * 100;
-  const cy = (anchor.cy ?? 0.60) * 100;
-  const fw = (anchor.fw ?? 0.24) * 100;
-  const fh = (anchor.fh ?? 0.32) * 100;
-  const topY = anchor.top != null ? anchor.top * 100 : (cy - fh * 0.5);
+  const cx = (anchor.cx ?? 0.50) * 100;
+  const cy = (anchor.cy ?? 0.43) * 100;
+  const fw = (anchor.fw ?? 0.36) * 100;
+  const fh = (anchor.fh ?? 0.54) * 100;
 
-  const headTopY = topY - fh * 0.12;
-  const hairlineY = topY + fh * 0.04;
-  const eyesY = topY + fh * 0.38;
-  const cheeksY = topY + fh * 0.58;
-  const leftCheekX = cx - fw * 0.26;
-  const rightCheekX = cx + fw * 0.26;
-  const noseY = topY + fh * 0.68;
+  const headTopY = cy - fh * 0.50;
+  const hairlineY = cy - fh * 0.35;
+  const eyesY = cy - fh * 0.11;
+  const cheeksY = cy + fh * 0.04;
+  const leftCheekX = cx - fw * 0.28;
+  const rightCheekX = cx + fw * 0.28;
+  const noseY = cy + fh * 0.15;
   const leftCheekY = cheeksY;
   const rightCheekY = cheeksY;
 
@@ -1549,27 +1548,29 @@ export function FaceEffectOverlay({ effectId, anchor = {}, isMirrored = true }) 
       {/* ---------------- 1. BUTTERFLY IG (BLUE) ---------------- */}
       {effectId === 'butterfly_ig' && (
         <>
-          <CheekBlush x={leftCheekX} y={leftCheekY} w={fw * 0.45} h={fh * 0.28} color="rgba(251, 113, 133, 0.38)" />
-          <CheekBlush x={rightCheekX} y={rightCheekY} w={fw * 0.45} h={fh * 0.28} color="rgba(251, 113, 133, 0.38)" />
+          <CheekBlush x={leftCheekX} y={leftCheekY} w={fw * 0.40} h={fh * 0.24} color="rgba(251, 113, 133, 0.35)" />
+          <CheekBlush x={rightCheekX} y={rightCheekY} w={fw * 0.40} h={fh * 0.24} color="rgba(251, 113, 133, 0.35)" />
 
+          {/* Center Butterfly on top of hair */}
           <div
             className="absolute -translate-x-1/2 -translate-y-1/2"
             style={{
               left: `${cx}%`,
-              top: `${headTopY - fh * 0.12}%`,
-              width: `${fw * 0.30}%`,
+              top: `${headTopY - fh * 0.04}%`,
+              width: `${fw * 0.25}%`,
               animation: 'igFlutterBob 2.8s ease-in-out infinite'
             }}
           >
             <SvgAnimatedButterfly size="100%" colorPrimary="#38bdf8" colorSecondary="#0284c7" />
           </div>
 
+          {/* Left Head Butterfly on top-left of hair */}
           <div
             className="absolute -translate-x-1/2 -translate-y-1/2"
             style={{
-              left: `${cx - fw * 0.38}%`,
-              top: `${headTopY - fh * 0.04}%`,
-              width: `${fw * 0.24}%`,
+              left: `${cx - fw * 0.26}%`,
+              top: `${headTopY + fh * 0.02}%`,
+              width: `${fw * 0.21}%`,
               transform: 'rotate(-16deg)',
               animation: 'igFlutterBob 3.2s ease-in-out infinite 0.5s'
             }}
@@ -1577,12 +1578,13 @@ export function FaceEffectOverlay({ effectId, anchor = {}, isMirrored = true }) 
             <SvgAnimatedButterfly size="100%" colorPrimary="#60a5fa" colorSecondary="#2563eb" />
           </div>
 
+          {/* Right Head Butterfly on top-right of hair */}
           <div
             className="absolute -translate-x-1/2 -translate-y-1/2"
             style={{
-              left: `${cx + fw * 0.36}%`,
-              top: `${headTopY - fh * 0.06}%`,
-              width: `${fw * 0.23}%`,
+              left: `${cx + fw * 0.26}%`,
+              top: `${headTopY + fh * 0.01}%`,
+              width: `${fw * 0.20}%`,
               transform: 'rotate(14deg)',
               animation: 'igFlutterBob 3s ease-in-out infinite 1s'
             }}
@@ -1594,9 +1596,9 @@ export function FaceEffectOverlay({ effectId, anchor = {}, isMirrored = true }) 
           <div
             className="absolute -translate-x-1/2 -translate-y-1/2 drop-shadow-md"
             style={{
-              left: `${leftCheekX - fw * 0.04}%`,
+              left: `${leftCheekX}%`,
               top: `${leftCheekY}%`,
-              width: `${fw * 0.25}%`,
+              width: `${fw * 0.22}%`,
               transform: 'rotate(-12deg)',
               animation: 'igFlutterBob 4s ease-in-out infinite 0.2s'
             }}
@@ -1604,26 +1606,26 @@ export function FaceEffectOverlay({ effectId, anchor = {}, isMirrored = true }) 
             <SvgAnimatedButterfly size="100%" colorPrimary="#38bdf8" colorSecondary="#0369a1" />
           </div>
 
-          <SvgSparkleBadge x={`${cx - fw * 0.18}%`} y={`${headTopY - fh * 0.18}%`} size={18} delay="0s" />
-          <SvgSparkleBadge x={`${cx + fw * 0.20}%`} y={`${headTopY - fh * 0.16}%`} size={20} delay="0.6s" />
-          <SvgSparkleBadge x={`${cx}%`} y={`${headTopY - fh * 0.28}%`} size={24} delay="1.2s" />
-          <SvgSparkleBadge x={`${leftCheekX + fw * 0.12}%`} y={`${leftCheekY - fh * 0.08}%`} size={16} delay="0.4s" />
-          <SvgSparkleBadge x={`${rightCheekX - fw * 0.12}%`} y={`${rightCheekY - fh * 0.08}%`} size={16} delay="0.9s" />
+          <SvgSparkleBadge x={`${cx - fw * 0.15}%`} y={`${headTopY - fh * 0.08}%`} size={18} delay="0s" />
+          <SvgSparkleBadge x={`${cx + fw * 0.18}%`} y={`${headTopY - fh * 0.06}%`} size={20} delay="0.6s" />
+          <SvgSparkleBadge x={`${cx}%`} y={`${hairlineY - fh * 0.04}%`} size={22} delay="1.2s" />
+          <SvgSparkleBadge x={`${leftCheekX + fw * 0.10}%`} y={`${leftCheekY - fh * 0.05}%`} size={16} delay="0.4s" />
+          <SvgSparkleBadge x={`${rightCheekX - fw * 0.10}%`} y={`${rightCheekY - fh * 0.05}%`} size={16} delay="0.9s" />
         </>
       )}
 
       {/* ---------------- 2. GOLDEN MONARCH BUTTERFLY ---------------- */}
       {effectId === 'butterfly_gold' && (
         <>
-          <CheekBlush x={leftCheekX} y={leftCheekY} w={fw * 0.45} h={fh * 0.28} color="rgba(245, 158, 11, 0.32)" />
-          <CheekBlush x={rightCheekX} y={rightCheekY} w={fw * 0.45} h={fh * 0.28} color="rgba(245, 158, 11, 0.32)" />
+          <CheekBlush x={leftCheekX} y={leftCheekY} w={fw * 0.40} h={fh * 0.24} color="rgba(245, 158, 11, 0.32)" />
+          <CheekBlush x={rightCheekX} y={rightCheekY} w={fw * 0.40} h={fh * 0.24} color="rgba(245, 158, 11, 0.32)" />
 
           <div
             className="absolute -translate-x-1/2 -translate-y-1/2"
             style={{
               left: `${cx}%`,
-              top: `${headTopY - fh * 0.14}%`,
-              width: `${fw * 0.32}%`,
+              top: `${headTopY - fh * 0.04}%`,
+              width: `${fw * 0.26}%`,
               animation: 'igFlutterBob 2.6s ease-in-out infinite'
             }}
           >
@@ -1633,9 +1635,35 @@ export function FaceEffectOverlay({ effectId, anchor = {}, isMirrored = true }) 
           <div
             className="absolute -translate-x-1/2 -translate-y-1/2"
             style={{
+              left: `${cx - fw * 0.26}%`,
+              top: `${headTopY + fh * 0.02}%`,
+              width: `${fw * 0.21}%`,
+              transform: 'rotate(-16deg)',
+              animation: 'igFlutterBob 3.2s ease-in-out infinite 0.5s'
+            }}
+          >
+            <SvgAnimatedButterfly size="100%" colorPrimary="#f59e0b" colorSecondary="#b45309" />
+          </div>
+
+          <div
+            className="absolute -translate-x-1/2 -translate-y-1/2"
+            style={{
+              left: `${cx + fw * 0.26}%`,
+              top: `${headTopY + fh * 0.01}%`,
+              width: `${fw * 0.20}%`,
+              transform: 'rotate(14deg)',
+              animation: 'igFlutterBob 3s ease-in-out infinite 1s'
+            }}
+          >
+            <SvgAnimatedButterfly size="100%" colorPrimary="#fcd34d" colorSecondary="#d97706" />
+          </div>
+
+          <div
+            className="absolute -translate-x-1/2 -translate-y-1/2 drop-shadow-md"
+            style={{
               left: `${leftCheekX}%`,
               top: `${leftCheekY}%`,
-              width: `${fw * 0.24}%`,
+              width: `${fw * 0.22}%`,
               transform: 'rotate(-15deg)',
               animation: 'igFlutterBob 3.8s ease-in-out infinite 0.3s'
             }}
@@ -1643,24 +1671,24 @@ export function FaceEffectOverlay({ effectId, anchor = {}, isMirrored = true }) 
             <SvgAnimatedButterfly size="100%" colorPrimary="#fbbf24" colorSecondary="#b45309" />
           </div>
 
-          <SvgSparkleBadge x={`${cx}%`} y={`${headTopY - fh * 0.25}%`} size={26} delay="0s" />
-          <SvgSparkleBadge x={`${cx - fw * 0.25}%`} y={`${headTopY - fh * 0.15}%`} size={18} delay="0.5s" />
-          <SvgSparkleBadge x={`${cx + fw * 0.25}%`} y={`${headTopY - fh * 0.15}%`} size={18} delay="1s" />
+          <SvgSparkleBadge x={`${cx}%`} y={`${headTopY - fh * 0.08}%`} size={22} delay="0s" />
+          <SvgSparkleBadge x={`${cx - fw * 0.18}%`} y={`${headTopY - fh * 0.04}%`} size={18} delay="0.5s" />
+          <SvgSparkleBadge x={`${cx + fw * 0.18}%`} y={`${headTopY - fh * 0.04}%`} size={18} delay="1s" />
         </>
       )}
 
       {/* ---------------- 3. SAKURA PINK BUTTERFLY ---------------- */}
       {effectId === 'butterfly_sakura' && (
         <>
-          <CheekBlush x={leftCheekX} y={leftCheekY} w={fw * 0.45} h={fh * 0.28} color="rgba(244, 114, 182, 0.38)" />
-          <CheekBlush x={rightCheekX} y={rightCheekY} w={fw * 0.45} h={fh * 0.28} color="rgba(244, 114, 182, 0.38)" />
+          <CheekBlush x={leftCheekX} y={leftCheekY} w={fw * 0.40} h={fh * 0.24} color="rgba(244, 114, 182, 0.38)" />
+          <CheekBlush x={rightCheekX} y={rightCheekY} w={fw * 0.40} h={fh * 0.24} color="rgba(244, 114, 182, 0.38)" />
 
           <div
             className="absolute -translate-x-1/2 -translate-y-1/2"
             style={{
               left: `${cx}%`,
-              top: `${headTopY - fh * 0.12}%`,
-              width: `${fw * 0.28}%`,
+              top: `${headTopY - fh * 0.04}%`,
+              width: `${fw * 0.26}%`,
               animation: 'igFlutterBob 3s ease-in-out infinite'
             }}
           >
@@ -1668,7 +1696,7 @@ export function FaceEffectOverlay({ effectId, anchor = {}, isMirrored = true }) 
           </div>
 
           <div
-            className="absolute -translate-x-1/2 -translate-y-1/2"
+            className="absolute -translate-x-1/2 -translate-y-1/2 drop-shadow-md"
             style={{
               left: `${leftCheekX}%`,
               top: `${leftCheekY}%`,
@@ -1679,7 +1707,7 @@ export function FaceEffectOverlay({ effectId, anchor = {}, isMirrored = true }) 
             <SvgAnimatedButterfly size="100%" colorPrimary="#fbcfe8" colorSecondary="#db2777" />
           </div>
 
-          <SvgSparkleBadge x={`${cx}%`} y={`${headTopY - fh * 0.2}%`} size={22} delay="0s" />
+          <SvgSparkleBadge x={`${cx}%`} y={`${headTopY - fh * 0.08}%`} size={22} delay="0s" />
           <SvgSparkleBadge x={`${leftCheekX}%`} y={`${leftCheekY}%`} size={16} delay="0.5s" />
         </>
       )}

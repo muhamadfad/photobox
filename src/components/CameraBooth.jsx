@@ -94,11 +94,11 @@ export default function CameraBooth({
   const [faceAutoTracking, setFaceAutoTracking] = useState(true);
   const [detectedFace, setDetectedFace] = useState({
     cx: 0.50,
-    cy: 0.62,
-    fw: 0.24,
-    fh: 0.32,
-    top: 0.46,
-    bottom: 0.78
+    cy: 0.43,
+    fw: 0.36,
+    fh: 0.54,
+    top: 0.16,
+    bottom: 0.70
   });
   const [faceScale, setFaceScale] = useState(1.0); // 0.6 to 1.6
   const [faceOffsetY, setFaceOffsetY] = useState(0); // -0.3 to +0.3
