@@ -14,13 +14,16 @@ import {
   Plus,
   Images,
   Maximize2,
-  ArrowLeft
+  ArrowLeft,
+  Sparkles
 } from 'lucide-react';
 import { soundFX } from '../utils/audio';
 import {
   analyzeVideoScene,
   processIntelligentCapture
 } from '../utils/filterEngine';
+import { initFaceLandmarker, detectFacePoses } from '../utils/arFaceLandmarker';
+import { AR_FILTERS, renderARFilter } from '../utils/arFilters';
 import confetti from 'canvas-confetti';
 
 export default function CameraBooth({
@@ -75,7 +78,15 @@ export default function CameraBooth({
   const [focusState, setFocusState] = useState('locked'); // 'locking' | 'locked'
   const [showFocusBox, setShowFocusBox] = useState(false);
 
+  // 3D Augmented Reality Face Filter States
+  const [selectedARFilter, setSelectedARFilter] = useState('none');
+  const [isLandmarkerReady, setIsLandmarkerReady] = useState(false);
+  const [detectedFacesCount, setDetectedFacesCount] = useState(0);
+
   const videoRef = useRef(null);
+  const arCanvasRef = useRef(null);
+  const animationFrameRef = useRef(null);
+  const latestPosesRef = useRef([]);
   const fileInputRef = useRef(null);
   const focusTimerRef = useRef(null);
 
@@ -250,6 +261,66 @@ export default function CameraBooth({
     return () => clearInterval(interval);
   }, [isOpen, cameraError, focusPoint, manualExposure, autoLight, viewMode]);
 
+  // Real-Time 3D Face Augmented Reality Engine using Google MediaPipe FaceLandmarker
+  useEffect(() => {
+    if (!isOpen || viewMode !== 'camera' || cameraError) {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      return;
+    }
+
+    let isMounted = true;
+    initFaceLandmarker()
+      .then(() => {
+        if (isMounted) setIsLandmarkerReady(true);
+      })
+      .catch((err) => {
+        console.warn('FaceLandmarker initialization warning:', err);
+      });
+
+    const renderARLoop = (timestamp) => {
+      const video = videoRef.current;
+      const canvas = arCanvasRef.current;
+
+      if (video && canvas && video.readyState >= 2 && video.videoWidth > 0) {
+        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
+
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (selectedARFilter !== 'none') {
+          const poses = detectFacePoses(video, timestamp, canvas.width, canvas.height);
+          if (poses && poses.length > 0) {
+            latestPosesRef.current = poses;
+            setDetectedFacesCount(poses.length);
+            renderARFilter(ctx, selectedARFilter, poses, timestamp / 1000, canvas.width, canvas.height);
+          } else {
+            latestPosesRef.current = [];
+            setDetectedFacesCount(0);
+          }
+        } else {
+          latestPosesRef.current = [];
+          setDetectedFacesCount(0);
+        }
+      }
+
+      animationFrameRef.current = requestAnimationFrame(renderARLoop);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(renderARLoop);
+
+    return () => {
+      isMounted = false;
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [isOpen, viewMode, selectedARFilter, cameraError]);
+
   const handleToggleFacing = () => {
     const nextMode = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(nextMode);
@@ -317,6 +388,17 @@ export default function CameraBooth({
         autoLight
       }
     });
+
+    // Composite active AR Filter onto captured photo with matching resolution and mirroring
+    if (selectedARFilter !== 'none' && arCanvasRef.current) {
+      ctx.save();
+      if (isMirrored) {
+        ctx.translate(outW, 0);
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(arCanvasRef.current, sx, sy, sw, sh, 0, 0, outW, outH);
+      ctx.restore();
+    }
 
     setFlash(true);
     soundFX.playShutter();
@@ -639,6 +721,13 @@ export default function CameraBooth({
                       transform: isMirrored ? 'scaleX(-1)' : 'none'
                     }}
                   />
+                  <canvas
+                    ref={arCanvasRef}
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none z-10"
+                    style={{
+                      transform: isMirrored ? 'scaleX(-1)' : 'none'
+                    }}
+                  />
 
                   {/* Interactive Auto-Focus & Auto-Exposure Reticle Box (Auto-fades in ~1.2s) */}
                   {showFocusBox && !isCountingDown && (
@@ -701,12 +790,28 @@ export default function CameraBooth({
                 </div>
               )}
 
-              {/* Top-Right Timer & Target Slot Indicator */}
+              {/* Top-Right Timer, AR Status & Target Slot Indicator */}
               {!isCountingDown && (
                 <div
                   className="absolute top-3 right-3 z-20 flex items-center gap-1.5 sm:gap-2"
                   onClick={(e) => e.stopPropagation()}
                 >
+                  {selectedARFilter !== 'none' && (
+                    <div className="bg-stone-900/75 backdrop-blur-xs text-white px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-bold border border-white/15 flex items-center gap-1.5 shadow-sm">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          detectedFacesCount > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                        }`}
+                      />
+                      <span className="hidden xs:inline">
+                        {!isLandmarkerReady
+                          ? 'Memuat AI AR...'
+                          : detectedFacesCount > 0
+                          ? 'Face AR Ready'
+                          : 'Mencari Wajah...'}
+                      </span>
+                    </div>
+                  )}
                   <div className="bg-stone-900/75 backdrop-blur-xs text-white px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-bold border border-white/15">
                     Slot #{currentSlotIndex + 1}/{totalSlots}
                   </div>
@@ -727,6 +832,54 @@ export default function CameraBooth({
               )}
             </div>
           </div>
+
+          {/* Instagram / TikTok Style 3D AR Face Filter Carousel (Ultra-Clean & Unobtrusive) */}
+          {!cameraError && (
+            <div className="shrink-0 flex items-center justify-center py-0.5">
+              <div
+                className={`flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 rounded-2xl border backdrop-blur-md shadow-md max-w-full overflow-x-auto no-scrollbar ${
+                  ringLightOn
+                    ? 'bg-white/95 border-amber-200 text-stone-800'
+                    : 'bg-stone-900/85 border-white/10 text-white'
+                }`}
+              >
+                <div className="flex items-center gap-1 text-[10px] font-black tracking-wider uppercase opacity-65 pr-1 shrink-0 select-none">
+                  <Sparkles className="w-3 h-3 text-rose-400" />
+                  <span className="hidden xs:inline">AR Effect</span>
+                </div>
+
+                {AR_FILTERS.map((f) => {
+                  const isActive = selectedARFilter === f.id;
+                  return (
+                    <button
+                      key={f.id}
+                      onClick={() => setSelectedARFilter(f.id)}
+                      className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                        isActive
+                          ? 'bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md shadow-rose-500/30 scale-[1.04]'
+                          : ringLightOn
+                          ? 'bg-stone-100 hover:bg-stone-200 text-stone-700'
+                          : 'bg-white/5 hover:bg-white/10 text-stone-300 hover:text-white'
+                      }`}
+                      title={f.description}
+                    >
+                      <span className="text-sm select-none">{f.icon}</span>
+                      <span className="text-[11px] sm:text-xs whitespace-nowrap">{f.name}</span>
+                      {f.badge && f.id !== 'none' && (
+                        <span
+                          className={`text-[9px] px-1.5 py-0.2 rounded-full font-semibold uppercase tracking-wider ${
+                            isActive ? 'bg-white/25 text-white' : 'bg-white/10 text-stone-400'
+                          }`}
+                        >
+                          {f.tag}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Bottom Camera Control Dock (Exposure + Shutter Buttons) */}
           <div
