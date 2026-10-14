@@ -155,6 +155,20 @@ export function detectFacePoses(videoElement, timestampMs, targetWidth, targetHe
       const leftCheekMid = pt(116);
       const rightCheekMid = pt(345);
 
+      // True cheek apples below eyes (NOT outer ear tragus 234/454)
+      const p117 = pt(117);
+      const p50 = pt(50);
+      const p346 = pt(346);
+      const p280 = pt(280);
+      const leftCheekApple = {
+        x: p117.x * 0.6 + p50.x * 0.4,
+        y: p117.y * 0.6 + p50.y * 0.4
+      };
+      const rightCheekApple = {
+        x: p346.x * 0.6 + p280.x * 0.4,
+        y: p346.y * 0.6 + p280.y * 0.4
+      };
+
       // Eye vector and roll angle
       const edx = eyeRight.x - eyeLeft.x;
       const edy = eyeRight.y - eyeLeft.y;
@@ -172,7 +186,7 @@ export function detectFacePoses(videoElement, timestampMs, targetWidth, targetHe
       // Temporal smoothing (EMA) to prevent high-frequency jitter
       const cacheKey = `face_${faceIndex}`;
       let cached = faceStateCache.get(cacheKey);
-      const alpha = 0.65; // Smoothing factor (0.65 responsive yet silky smooth)
+      const alpha = 0.68; // Smoothing factor (0.68 responsive yet silky smooth)
 
       if (!cached) {
         cached = {
@@ -184,6 +198,8 @@ export function detectFacePoses(videoElement, timestampMs, targetWidth, targetHe
           noseTip: { ...noseTip },
           leftCheek: { ...leftCheek },
           rightCheek: { ...rightCheek },
+          leftCheekApple: { ...leftCheekApple },
+          rightCheekApple: { ...rightCheekApple },
           leftCheekMid: { ...leftCheekMid },
           rightCheekMid: { ...rightCheekMid },
           noseBridge: { ...noseBridge },
@@ -212,11 +228,23 @@ export function detectFacePoses(videoElement, timestampMs, targetWidth, targetHe
         smoothPt(cached.noseTip, noseTip);
         smoothPt(cached.leftCheek, leftCheek);
         smoothPt(cached.rightCheek, rightCheek);
+        smoothPt(cached.leftCheekApple, leftCheekApple);
+        smoothPt(cached.rightCheekApple, rightCheekApple);
         smoothPt(cached.leftCheekMid, leftCheekMid);
         smoothPt(cached.rightCheekMid, rightCheekMid);
         smoothPt(cached.noseBridge, noseBridge);
       }
       faceStateCache.set(cacheKey, cached);
+
+      // Natural crown of hair and hovering halo positions above hair
+      const headTop = {
+        x: cached.forehead.x + cached.upX * (cached.eyeDist * 0.72),
+        y: cached.forehead.y + cached.upY * (cached.eyeDist * 0.72)
+      };
+      const hoverCrown = {
+        x: cached.forehead.x + cached.upX * (cached.eyeDist * 1.05),
+        y: cached.forehead.y + cached.upY * (cached.eyeDist * 1.05)
+      };
 
       return {
         rawLandmarks,
@@ -228,11 +256,15 @@ export function detectFacePoses(videoElement, timestampMs, targetWidth, targetHe
         upVector: { x: cached.upX, y: cached.upY },
         forehead: cached.forehead,
         midForehead: cached.midForehead,
+        headTop,
+        hoverCrown,
         glabella,
         noseTip: cached.noseTip,
         subnasale,
         leftCheek: cached.leftCheek,
         rightCheek: cached.rightCheek,
+        leftCheekApple: cached.leftCheekApple,
+        rightCheekApple: cached.rightCheekApple,
         leftCheekMid: cached.leftCheekMid,
         rightCheekMid: cached.rightCheekMid,
         noseBridge: cached.noseBridge,
