@@ -301,6 +301,7 @@ export default function CameraBooth({
           } else {
             latestPosesRef.current = [];
             setDetectedFacesCount(0);
+            renderARFilter(ctx, selectedARFilter, [], timestamp / 1000, canvas.width, canvas.height);
           }
         } else {
           latestPosesRef.current = [];

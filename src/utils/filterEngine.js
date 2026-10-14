@@ -172,6 +172,44 @@ export const PRESET_FILTERS = {
       halftone: false,
       dateStamp: true,
     }
+  },
+  capuccino: {
+    id: 'capuccino',
+    name: 'Capuccino Cafe',
+    badge: 'foreversleeep',
+    swatch: '#a27b5c',
+    tagline: 'Tone cafe latte hangat, bayangan lembut & vintage film dust ala foreversleeep',
+    settings: {
+      brightness: 2,
+      contrast: -3,
+      saturation: -6,
+      warmth: 16,
+      tint: 6,
+      softGlow: 16,
+      filmGrain: 22,
+      vignette: 14,
+      halftone: false,
+      dateStamp: false,
+    }
+  },
+  el_filme: {
+    id: 'el_filme',
+    name: 'El Filme 90s',
+    badge: 'supernuay',
+    swatch: '#d97706',
+    tagline: 'Golden hour sunlight glow, dreamy bloom halation & 90s analog film ala supernuay',
+    settings: {
+      brightness: 4,
+      contrast: 6,
+      saturation: 12,
+      warmth: 24,
+      tint: -3,
+      softGlow: 24,
+      filmGrain: 18,
+      vignette: 10,
+      halftone: false,
+      dateStamp: false,
+    }
   }
 };
 

@@ -13,6 +13,22 @@ export const AR_FILTERS = [
     description: 'Kamera HD Natural tanpa filter AR'
   },
   {
+    id: 'capuccino',
+    name: 'Capuccino',
+    tag: 'foreversleeep',
+    icon: '☕',
+    badge: 'Cozy Cafe',
+    description: 'Tone cafe latte hangat, vintage film dust & retro grain ala foreversleeep'
+  },
+  {
+    id: 'el_filme',
+    name: 'El Filme',
+    tag: 'supernuay',
+    icon: '🎞️',
+    badge: '90s Gold',
+    description: 'Golden hour sunlight glow, dreamy bloom & 90s star sparkles ala supernuay'
+  },
+  {
     id: 'pink_tea',
     name: 'Pink Tea :-)',
     tag: 'pink tea :-)',
@@ -755,6 +771,128 @@ function renderPinkTea(ctx, pose, time) {
 }
 
 /**
+ * Filter 6: Capuccino (Capuccino by foreversleeep)
+ * Warm creamy latte cafe wash, subtle vintage film dust particles,
+ * soft vignette, and cozy latte blush when face is present
+ */
+function renderCapuccino(ctx, poses, time, width = 640, height = 480) {
+  // 1. Warm Creamy Latte Ambient Atmosphere
+  const latteGrad = ctx.createLinearGradient(0, 0, 0, height);
+  latteGrad.addColorStop(0, 'rgba(215, 175, 140, 0.14)');
+  latteGrad.addColorStop(0.5, 'rgba(185, 145, 115, 0.10)');
+  latteGrad.addColorStop(1, 'rgba(140, 100, 75, 0.16)');
+  ctx.fillStyle = latteGrad;
+  ctx.fillRect(0, 0, width, height);
+
+  // Soft Vignette (cozy dark cafe corners)
+  const vig = ctx.createRadialGradient(
+    width / 2, height / 2, Math.min(width, height) * 0.35,
+    width / 2, height / 2, Math.max(width, height) * 0.75
+  );
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(55, 30, 20, 0.24)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, width, height);
+
+  // 2. Vintage Film Dust Particles & Specks (organic, gentle drift)
+  const dustCount = 16;
+  ctx.fillStyle = 'rgba(255, 245, 235, 0.32)';
+  for (let i = 0; i < dustCount; i++) {
+    const seedX = (Math.sin(i * 127.1 + 3.1) * 0.5 + 0.5);
+    const seedY = (Math.cos(i * 311.7 + 1.7) * 0.5 + 0.5);
+    const driftX = (seedX + (time * 0.015 * ((i % 3) + 1))) % 1.0;
+    const driftY = (seedY + (time * 0.02 * (((i + 1) % 4) + 1))) % 1.0;
+
+    const px = driftX * width;
+    const py = driftY * height;
+    const size = (i % 3 === 0) ? 1.8 : 1.2;
+
+    ctx.beginPath();
+    ctx.arc(px, py, size, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Occasional tiny vintage lint thread
+    if (i % 5 === 0) {
+      ctx.strokeStyle = 'rgba(255, 240, 225, 0.22)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + 4, py + 2);
+      ctx.stroke();
+    }
+  }
+
+  // 3. If Face is detected: Cozy Latte-Rose Cheek Blush & Soft Glow
+  if (poses && poses.length > 0) {
+    poses.forEach((pose) => {
+      const { angle, eyeDist, leftCheek, rightCheek, noseTip } = pose;
+      const blushRadius = eyeDist * 0.42;
+      drawSoftBlush(ctx, leftCheek.x, leftCheek.y, blushRadius, blushRadius * 0.75, angle, 'rgba(195, 115, 95, 0.28)');
+      drawSoftBlush(ctx, rightCheek.x, rightCheek.y, blushRadius, blushRadius * 0.75, angle, 'rgba(195, 115, 95, 0.28)');
+      drawSoftBlush(ctx, noseTip.x, noseTip.y - eyeDist * 0.08, eyeDist * 0.22, eyeDist * 0.12, angle, 'rgba(195, 115, 95, 0.20)');
+    });
+  }
+}
+
+/**
+ * Filter 7: El Filme (el filme by supernuay)
+ * Golden hour sunlight glow, dreamy bloom, 90s star sparkle glints (✦),
+ * and sun-kissed golden peach blush
+ */
+function renderElFilme(ctx, poses, time, width = 640, height = 480) {
+  // 1. Golden Hour Sunlight Glow (Sunbeam wash from top-left)
+  const sunGrad = ctx.createRadialGradient(
+    width * 0.1, -height * 0.05, 0,
+    width * 0.3, height * 0.4, Math.max(width, height) * 0.95
+  );
+  sunGrad.addColorStop(0, 'rgba(255, 225, 130, 0.28)');
+  sunGrad.addColorStop(0.35, 'rgba(255, 185, 90, 0.15)');
+  sunGrad.addColorStop(0.7, 'rgba(240, 140, 60, 0.08)');
+  sunGrad.addColorStop(1, 'rgba(200, 100, 40, 0.02)');
+  ctx.fillStyle = sunGrad;
+  ctx.fillRect(0, 0, width, height);
+
+  // Warm golden ambient film tint
+  ctx.fillStyle = 'rgba(255, 190, 110, 0.07)';
+  ctx.fillRect(0, 0, width, height);
+
+  // 2. 90s Star Sparkle Glints (✦) twinkling in the golden light
+  const ambientSparkles = [
+    { x: 0.18, y: 0.15, size: 14, phase: 0 },
+    { x: 0.82, y: 0.22, size: 12, phase: 1.8 },
+    { x: 0.12, y: 0.58, size: 15, phase: 2.7 },
+    { x: 0.75, y: 0.65, size: 13, phase: 3.5 },
+    { x: 0.45, y: 0.12, size: 11, phase: 0.9 }
+  ];
+
+  ambientSparkles.forEach((s, idx) => {
+    const pulse = 0.5 + 0.5 * Math.sin(time * 3.2 + s.phase);
+    const px = s.x * width;
+    const py = s.y * height;
+    drawSparkleStar(ctx, px, py, s.size * (0.6 + 0.4 * pulse), 0.35 + 0.55 * pulse, time * 0.4 + idx);
+  });
+
+  // 3. Face Enhancements: Sun-kissed golden peach blush & glints near hair
+  if (poses && poses.length > 0) {
+    poses.forEach((pose) => {
+      const { angle, eyeDist, forehead, leftCheek, rightCheek, noseTip, upVector } = pose;
+
+      // Sun-kissed golden-peach blush
+      const blushRadius = eyeDist * 0.44;
+      drawSoftBlush(ctx, leftCheek.x, leftCheek.y, blushRadius, blushRadius * 0.75, angle, 'rgba(245, 125, 75, 0.28)');
+      drawSoftBlush(ctx, rightCheek.x, rightCheek.y, blushRadius, blushRadius * 0.75, angle, 'rgba(245, 125, 75, 0.28)');
+      drawSoftBlush(ctx, noseTip.x, noseTip.y - eyeDist * 0.08, eyeDist * 0.25, eyeDist * 0.15, angle, 'rgba(245, 125, 75, 0.22)');
+
+      // Highlight glint near hair crown / hairline
+      const hairGlintX = forehead.x + upVector.x * (eyeDist * 0.35) - Math.cos(angle) * (eyeDist * 0.25);
+      const hairGlintY = forehead.y + upVector.y * (eyeDist * 0.35) - Math.sin(angle) * (eyeDist * 0.25);
+      const pulse = 0.5 + 0.5 * Math.sin(time * 4.0);
+      drawSparkleStar(ctx, hairGlintX, hairGlintY, eyeDist * 0.18 * (0.7 + 0.3 * pulse), 0.8 * pulse, time * 0.5);
+    });
+  }
+}
+
+/**
  * Master entry point: Renders the active AR filter onto any Canvas 2D context
  * @param {CanvasRenderingContext2D} ctx
  * @param {string} filterId
@@ -763,10 +901,23 @@ function renderPinkTea(ctx, pose, time) {
  * @param {number} width
  * @param {number} height
  */
-export function renderARFilter(ctx, filterId, poses, time = 0, width = 640, height = 480) {
-  if (!filterId || filterId === 'none' || !poses || poses.length === 0) {
+export function renderARFilter(ctx, filterId, poses = [], time = 0, width = 640, height = 480) {
+  if (!filterId || filterId === 'none') {
     return;
   }
+
+  // Atmospheric film filters (can render ambient tone even if face is momentarily obscured)
+  if (filterId === 'capuccino') {
+    renderCapuccino(ctx, poses, time, width, height);
+    return;
+  }
+  if (filterId === 'el_filme') {
+    renderElFilme(ctx, poses, time, width, height);
+    return;
+  }
+
+  // Facial Landmark AR filters (require detected face poses)
+  if (!poses || poses.length === 0) return;
 
   poses.forEach((pose) => {
     switch (filterId) {
