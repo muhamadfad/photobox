@@ -26,7 +26,8 @@ import {
   EFFECT_CATEGORIES,
   FACE_EFFECTS,
   FaceEffectOverlay,
-  renderFaceEffectToCanvas
+  renderFaceEffectToCanvas,
+  detectFaceInVideo
 } from '../utils/faceEffects';
 import confetti from 'canvas-confetti';
 
@@ -87,12 +88,24 @@ export default function CameraBooth({
   const [showEffectsBar, setShowEffectsBar] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('all');
 
-  // Dynamic AR Face Anchor (follows user auto-focus tap / centered default)
+  // Real-Time Face Tracking & Calibration State
+  const [faceAutoTracking, setFaceAutoTracking] = useState(true);
+  const [detectedFace, setDetectedFace] = useState({
+    cx: 0.50,
+    cy: 0.62,
+    fw: 0.24,
+    fh: 0.32
+  });
+  const [faceScale, setFaceScale] = useState(1.0); // 0.6 to 1.6
+  const [faceOffsetY, setFaceOffsetY] = useState(0); // -0.3 to +0.3
+  const [faceOffsetX, setFaceOffsetX] = useState(0); // -0.3 to +0.3
+
+  // Effective Dynamic AR Face Anchor (Combines real-time detection + manual nudges)
   const faceAnchor = {
-    cx: focusPoint.x,
-    cy: Math.max(0.32, Math.min(0.65, focusPoint.y - 0.04)),
-    fw: 0.38,
-    fh: 0.50
+    cx: Math.max(0.08, Math.min(0.92, detectedFace.cx + faceOffsetX)),
+    cy: Math.max(0.08, Math.min(0.92, detectedFace.cy + faceOffsetY)),
+    fw: Math.max(0.12, Math.min(0.65, detectedFace.fw * faceScale)),
+    fh: Math.max(0.16, Math.min(0.85, detectedFace.fh * faceScale))
   };
 
   const videoRef = useRef(null);
@@ -269,6 +282,33 @@ export default function CameraBooth({
     return () => clearInterval(interval);
   }, [isOpen, cameraError, focusPoint, manualExposure, autoLight, viewMode]);
 
+  // Continuous Real-Time Computer Vision Face Tracking (250ms interval)
+  useEffect(() => {
+    if (!isOpen || cameraError || viewMode !== 'camera' || !faceAutoTracking || selectedFaceEffect === 'none') return;
+
+    let isCancelled = false;
+    const interval = setInterval(async () => {
+      if (!videoRef.current || videoRef.current.readyState < 2) return;
+      try {
+        const detected = await detectFaceInVideo(videoRef.current);
+        if (detected && !isCancelled) {
+          const targetCx = isMirrored ? 1 - detected.cx : detected.cx;
+          setDetectedFace((prev) => ({
+            cx: prev.cx * 0.72 + targetCx * 0.28,
+            cy: prev.cy * 0.72 + detected.cy * 0.28,
+            fw: prev.fw * 0.72 + detected.fw * 0.28,
+            fh: prev.fh * 0.72 + detected.fh * 0.28
+          }));
+        }
+      } catch (e) {}
+    }, 250);
+
+    return () => {
+      isCancelled = true;
+      clearInterval(interval);
+    };
+  }, [isOpen, cameraError, viewMode, faceAutoTracking, selectedFaceEffect, isMirrored]);
+
   const handleToggleFacing = () => {
     const nextMode = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(nextMode);
@@ -282,6 +322,15 @@ export default function CameraBooth({
     const clickX = Math.min(0.88, Math.max(0.12, (e.clientX - rect.left) / rect.width));
     const clickY = Math.min(0.85, Math.max(0.15, (e.clientY - rect.top) / rect.height));
     triggerAutoFocusLock({ x: clickX, y: clickY });
+
+    // Instantly snap filter anchor directly to where user tapped!
+    setDetectedFace((prev) => ({
+      ...prev,
+      cx: clickX,
+      cy: clickY
+    }));
+    setFaceOffsetX(0);
+    setFaceOffsetY(0);
   };
 
   // Capture frame at Ultra-HD 4:3 resolution preserving 100% native camera sharpness & colors
@@ -772,6 +821,90 @@ export default function CameraBooth({
                           );
                         })}
                       </div>
+
+                      {/* Interactive Calibration & Face Fit Controls */}
+                      {selectedFaceEffect !== 'none' && (
+                        <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-1.5 p-1 px-2 bg-black/80 backdrop-blur-md rounded-xl border border-white/20 text-white text-[10px] sm:text-[11px] shadow-lg max-w-full">
+                          <span className="font-bold text-amber-300">Posisi:</span>
+                          <button
+                            onClick={() => {
+                              setFaceAutoTracking(false);
+                              setFaceOffsetY((prev) => prev - 0.03);
+                            }}
+                            className="px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
+                            title="Geser Efek Naik"
+                          >
+                            ▲ Naik
+                          </button>
+                          <button
+                            onClick={() => {
+                              setFaceAutoTracking(false);
+                              setFaceOffsetY((prev) => prev + 0.03);
+                            }}
+                            className="px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
+                            title="Geser Efek Turun"
+                          >
+                            ▼ Turun
+                          </button>
+                          <button
+                            onClick={() => {
+                              setFaceAutoTracking(false);
+                              setFaceOffsetX((prev) => prev - 0.03);
+                            }}
+                            className="px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
+                            title="Geser Efek Kiri"
+                          >
+                            ◀ Kiri
+                          </button>
+                          <button
+                            onClick={() => {
+                              setFaceAutoTracking(false);
+                              setFaceOffsetX((prev) => prev + 0.03);
+                            }}
+                            className="px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
+                            title="Geser Efek Kanan"
+                          >
+                            ▶ Kanan
+                          </button>
+
+                          <div className="h-3 w-px bg-white/20 mx-0.5 hidden sm:block" />
+
+                          <span className="font-bold text-amber-300">Ukuran:</span>
+                          <button
+                            onClick={() => setFaceScale((prev) => Math.max(0.6, Number((prev - 0.1).toFixed(2))))}
+                            className="px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
+                            title="Kecilkan Ukuran Efek"
+                          >
+                            − Kecil
+                          </button>
+                          <span className="font-mono text-amber-300 w-7 text-center font-bold">
+                            {Math.round(faceScale * 100)}%
+                          </span>
+                          <button
+                            onClick={() => setFaceScale((prev) => Math.min(1.6, Number((prev + 0.1).toFixed(2))))}
+                            className="px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
+                            title="Besarkan Ukuran Efek"
+                          >
+                            + Besar
+                          </button>
+
+                          <div className="h-3 w-px bg-white/20 mx-0.5 hidden sm:block" />
+
+                          <button
+                            onClick={() => {
+                              setFaceOffsetX(0);
+                              setFaceOffsetY(0);
+                              setFaceScale(1.0);
+                              setFaceAutoTracking(true);
+                            }}
+                            className="px-2 py-0.5 rounded-md bg-rose-500 hover:bg-rose-600 text-white font-bold active:scale-95 transition flex items-center gap-1 shadow-xs"
+                            title="Kembalikan Posisi Otomatis ke Wajah"
+                          >
+                            <RefreshCw className="w-2.5 h-2.5" />
+                            <span>Auto-Pas</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
