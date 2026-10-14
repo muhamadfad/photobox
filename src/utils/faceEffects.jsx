@@ -33,10 +33,12 @@ export async function detectFaceInVideo(video) {
       if (faces && faces.length > 0) {
         const box = faces[0].boundingBox;
         const cx = (box.x + box.width * 0.5) / vw;
-        const cy = (box.y + box.height * 0.42) / vh;
+        const cy = (box.y + box.height * 0.5) / vh;
         const fw = Math.max(0.16, Math.min(0.45, box.width / vw));
         const fh = Math.max(0.20, Math.min(0.55, box.height / vh));
-        return { cx, cy, fw, fh, confidence: 0.95 };
+        const top = box.y / vh;
+        const bottom = (box.y + box.height) / vh;
+        return { cx, cy, fw, fh, top, bottom, confidence: 0.95 };
       }
     } catch (e) {
       // Ignore and fallback
@@ -96,13 +98,17 @@ export async function detectFaceInVideo(video) {
     if (count > 25) {
       const avgX = (sumX / count) / sw;
       const avgY = (sumY / count) / sh;
-      const clusterW = Math.max(0.18, Math.min(0.35, ((maxX - minX) / sw) * 1.1));
-      const clusterH = Math.max(0.24, Math.min(0.46, ((maxY - minY) / sh) * 1.1));
+      const clusterW = Math.max(0.18, Math.min(0.35, ((maxX - minX) / sw) * 1.05));
+      const clusterH = Math.max(0.24, Math.min(0.46, ((maxY - minY) / sh) * 1.05));
+      const top = minY / sh;
+      const bottom = maxY / sh;
       return {
         cx: avgX,
         cy: avgY,
         fw: clusterW,
         fh: clusterH,
+        top,
+        bottom,
         confidence: 0.8
       };
     }
@@ -642,13 +648,17 @@ export function renderFaceEffectToCanvas(ctx, width, height, effectId, anchor = 
   const cy = (anchor.cy ?? 0.60) * height;
   const fw = (anchor.fw ?? 0.24) * width;
   const fh = (anchor.fh ?? 0.32) * height;
+  const topY = anchor.top != null ? anchor.top * height : (cy - fh * 0.5);
 
-  const headTopY = cy - fh * 0.28;
-  const leftCheekX = cx - fw * 0.24;
-  const leftCheekY = cy + fh * 0.12;
-  const rightCheekX = cx + fw * 0.24;
-  const rightCheekY = cy + fh * 0.12;
-  const noseY = cy + fh * 0.04;
+  const headTopY = topY - fh * 0.12;
+  const hairlineY = topY + fh * 0.04;
+  const eyesY = topY + fh * 0.38;
+  const cheeksY = topY + fh * 0.58;
+  const leftCheekX = cx - fw * 0.26;
+  const rightCheekX = cx + fw * 0.26;
+  const noseY = topY + fh * 0.68;
+  const leftCheekY = cheeksY;
+  const rightCheekY = cheeksY;
 
   ctx.save();
 
@@ -1490,13 +1500,17 @@ export function FaceEffectOverlay({ effectId, anchor = {}, isMirrored = true }) 
   const cy = (anchor.cy ?? 0.60) * 100;
   const fw = (anchor.fw ?? 0.24) * 100;
   const fh = (anchor.fh ?? 0.32) * 100;
+  const topY = anchor.top != null ? anchor.top * 100 : (cy - fh * 0.5);
 
-  const headTopY = cy - fh * 0.28;
-  const leftCheekX = cx - fw * 0.24;
-  const leftCheekY = cy + fh * 0.12;
-  const rightCheekX = cx + fw * 0.24;
-  const rightCheekY = cy + fh * 0.12;
-  const noseY = cy + fh * 0.04;
+  const headTopY = topY - fh * 0.12;
+  const hairlineY = topY + fh * 0.04;
+  const eyesY = topY + fh * 0.38;
+  const cheeksY = topY + fh * 0.58;
+  const leftCheekX = cx - fw * 0.26;
+  const rightCheekX = cx + fw * 0.26;
+  const noseY = topY + fh * 0.68;
+  const leftCheekY = cheeksY;
+  const rightCheekY = cheeksY;
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden z-25 select-none">

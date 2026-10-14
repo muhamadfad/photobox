@@ -94,18 +94,25 @@ export default function CameraBooth({
     cx: 0.50,
     cy: 0.62,
     fw: 0.24,
-    fh: 0.32
+    fh: 0.32,
+    top: 0.46,
+    bottom: 0.78
   });
   const [faceScale, setFaceScale] = useState(1.0); // 0.6 to 1.6
   const [faceOffsetY, setFaceOffsetY] = useState(0); // -0.3 to +0.3
   const [faceOffsetX, setFaceOffsetX] = useState(0); // -0.3 to +0.3
 
   // Effective Dynamic AR Face Anchor (Combines real-time detection + manual nudges)
+  const baseTop = detectedFace.top != null ? detectedFace.top : (detectedFace.cy - detectedFace.fh * 0.5);
+  const baseBottom = detectedFace.bottom != null ? detectedFace.bottom : (detectedFace.cy + detectedFace.fh * 0.5);
+
   const faceAnchor = {
     cx: Math.max(0.08, Math.min(0.92, detectedFace.cx + faceOffsetX)),
     cy: Math.max(0.08, Math.min(0.92, detectedFace.cy + faceOffsetY)),
     fw: Math.max(0.12, Math.min(0.65, detectedFace.fw * faceScale)),
-    fh: Math.max(0.16, Math.min(0.85, detectedFace.fh * faceScale))
+    fh: Math.max(0.16, Math.min(0.85, detectedFace.fh * faceScale)),
+    top: Math.max(0.02, Math.min(0.85, baseTop + faceOffsetY)),
+    bottom: Math.max(0.15, Math.min(0.98, baseBottom + faceOffsetY))
   };
 
   const videoRef = useRef(null);
@@ -297,7 +304,9 @@ export default function CameraBooth({
             cx: prev.cx * 0.72 + targetCx * 0.28,
             cy: prev.cy * 0.72 + detected.cy * 0.28,
             fw: prev.fw * 0.72 + detected.fw * 0.28,
-            fh: prev.fh * 0.72 + detected.fh * 0.28
+            fh: prev.fh * 0.72 + detected.fh * 0.28,
+            top: prev.top != null && detected.top != null ? prev.top * 0.72 + detected.top * 0.28 : detected.top,
+            bottom: prev.bottom != null && detected.bottom != null ? prev.bottom * 0.72 + detected.bottom * 0.28 : detected.bottom
           }));
         }
       } catch (e) {}
@@ -324,10 +333,13 @@ export default function CameraBooth({
     triggerAutoFocusLock({ x: clickX, y: clickY });
 
     // Instantly snap filter anchor directly to where user tapped!
+    setFaceAutoTracking(false);
     setDetectedFace((prev) => ({
       ...prev,
       cx: clickX,
-      cy: clickY
+      cy: clickY,
+      top: clickY - prev.fh * 0.5,
+      bottom: clickY + prev.fh * 0.5
     }));
     setFaceOffsetX(0);
     setFaceOffsetY(0);
