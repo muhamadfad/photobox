@@ -14,22 +14,13 @@ import {
   Plus,
   Images,
   Maximize2,
-  ArrowLeft,
-  Sparkles,
-  Sliders
+  ArrowLeft
 } from 'lucide-react';
 import { soundFX } from '../utils/audio';
 import {
   analyzeVideoScene,
   processIntelligentCapture
 } from '../utils/filterEngine';
-import {
-  EFFECT_CATEGORIES,
-  FACE_EFFECTS,
-  FaceEffectOverlay,
-  renderFaceEffectToCanvas,
-  detectFaceInVideo
-} from '../utils/faceEffects';
 import confetti from 'canvas-confetti';
 
 export default function CameraBooth({
@@ -83,44 +74,6 @@ export default function CameraBooth({
   const [focusPoint, setFocusPoint] = useState({ x: 0.5, y: 0.5 });
   const [focusState, setFocusState] = useState('locked'); // 'locking' | 'locked'
   const [showFocusBox, setShowFocusBox] = useState(false);
-
-  // AR Face Filter State (Instagram Butterfly, Flower Crown, etc.)
-  const [selectedFaceEffect, setSelectedFaceEffect] = useState('butterfly_ig');
-  const [showEffectsBar, setShowEffectsBar] = useState(false);
-  const [showCalibration, setShowCalibration] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('all');
-
-  // Real-Time Face Tracking & Calibration State
-  const [faceAutoTracking, setFaceAutoTracking] = useState(true);
-  const [detectedFace, setDetectedFace] = useState({
-    cx: 0.50,
-    cy: 0.43,
-    fw: 0.36,
-    fh: 0.54,
-    top: 0.16,
-    bottom: 0.70
-  });
-  const [faceScale, setFaceScale] = useState(1.0); // 0.6 to 1.6
-  const [faceOffsetY, setFaceOffsetY] = useState(0); // -0.3 to +0.3
-  const [faceOffsetX, setFaceOffsetX] = useState(0); // -0.3 to +0.3
-
-  // Effective Dynamic AR Face Anchor (Combines real-time detection + manual nudges)
-  const effCy = Math.max(0.08, Math.min(0.92, detectedFace.cy + faceOffsetY));
-  const effFw = Math.max(0.12, Math.min(0.65, detectedFace.fw * faceScale));
-  const effFh = Math.max(0.16, Math.min(0.85, detectedFace.fh * faceScale));
-  const baseTop = detectedFace.top != null ? detectedFace.top : (detectedFace.cy - detectedFace.fh * 0.5);
-  const baseBottom = detectedFace.bottom != null ? detectedFace.bottom : (detectedFace.cy + detectedFace.fh * 0.5);
-  const halfDistTop = Math.max(0.08, detectedFace.cy - baseTop);
-  const halfDistBottom = Math.max(0.08, baseBottom - detectedFace.cy);
-
-  const faceAnchor = {
-    cx: Math.max(0.08, Math.min(0.92, detectedFace.cx + faceOffsetX)),
-    cy: effCy,
-    fw: effFw,
-    fh: effFh,
-    top: Math.max(0.02, Math.min(0.85, effCy - halfDistTop * faceScale)),
-    bottom: Math.max(0.15, Math.min(0.98, effCy + halfDistBottom * faceScale))
-  };
 
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -297,35 +250,6 @@ export default function CameraBooth({
     return () => clearInterval(interval);
   }, [isOpen, cameraError, focusPoint, manualExposure, autoLight, viewMode]);
 
-  // Continuous Real-Time Computer Vision Face Tracking (250ms interval)
-  useEffect(() => {
-    if (!isOpen || cameraError || viewMode !== 'camera' || !faceAutoTracking || selectedFaceEffect === 'none') return;
-
-    let isCancelled = false;
-    const interval = setInterval(async () => {
-      if (!videoRef.current || videoRef.current.readyState < 2) return;
-      try {
-        const detected = await detectFaceInVideo(videoRef.current);
-        if (detected && !isCancelled) {
-          const targetCx = isMirrored ? 1 - detected.cx : detected.cx;
-          setDetectedFace((prev) => ({
-            cx: prev.cx * 0.72 + targetCx * 0.28,
-            cy: prev.cy * 0.72 + detected.cy * 0.28,
-            fw: prev.fw * 0.72 + detected.fw * 0.28,
-            fh: prev.fh * 0.72 + detected.fh * 0.28,
-            top: prev.top != null && detected.top != null ? prev.top * 0.72 + detected.top * 0.28 : detected.top,
-            bottom: prev.bottom != null && detected.bottom != null ? prev.bottom * 0.72 + detected.bottom * 0.28 : detected.bottom
-          }));
-        }
-      } catch (e) {}
-    }, 250);
-
-    return () => {
-      isCancelled = true;
-      clearInterval(interval);
-    };
-  }, [isOpen, cameraError, viewMode, faceAutoTracking, selectedFaceEffect, isMirrored]);
-
   const handleToggleFacing = () => {
     const nextMode = facingMode === 'user' ? 'environment' : 'user';
     setFacingMode(nextMode);
@@ -339,18 +263,6 @@ export default function CameraBooth({
     const clickX = Math.min(0.88, Math.max(0.12, (e.clientX - rect.left) / rect.width));
     const clickY = Math.min(0.85, Math.max(0.15, (e.clientY - rect.top) / rect.height));
     triggerAutoFocusLock({ x: clickX, y: clickY });
-
-    // Instantly snap filter anchor directly to where user tapped!
-    setFaceAutoTracking(false);
-    setDetectedFace((prev) => ({
-      ...prev,
-      cx: clickX,
-      cy: clickY,
-      top: clickY - prev.fh * 0.5,
-      bottom: clickY + prev.fh * 0.5
-    }));
-    setFaceOffsetX(0);
-    setFaceOffsetY(0);
   };
 
   // Capture frame at Ultra-HD 4:3 resolution preserving 100% native camera sharpness & colors
@@ -405,11 +317,6 @@ export default function CameraBooth({
         autoLight
       }
     });
-
-    // Bake AR Face Filter onto captured high-res canvas (Instagram Butterfly, Flower Crown, etc.)
-    if (selectedFaceEffect && selectedFaceEffect !== 'none') {
-      renderFaceEffectToCanvas(ctx, outW, outH, selectedFaceEffect, faceAnchor);
-    }
 
     setFlash(true);
     soundFX.playShutter();
@@ -733,15 +640,6 @@ export default function CameraBooth({
                     }}
                   />
 
-                  {/* AR Real-Time Animated Face Effect Overlay */}
-                  {selectedFaceEffect !== 'none' && (
-                    <FaceEffectOverlay
-                      effectId={selectedFaceEffect}
-                      anchor={faceAnchor}
-                      isMirrored={isMirrored}
-                    />
-                  )}
-
                   {/* Interactive Auto-Focus & Auto-Exposure Reticle Box (Auto-fades in ~1.2s) */}
                   {showFocusBox && !isCountingDown && (
                     <div
@@ -767,200 +665,6 @@ export default function CameraBooth({
                           }`}
                         />
                       </div>
-                    </div>
-                  )}
-
-                  {/* Sleek Docked Instagram-Style AR Face Filter Drawer */}
-                  {showEffectsBar && !isCountingDown && (
-                    <div
-                      className="absolute bottom-0 inset-x-0 z-30 p-2 sm:p-2.5 bg-stone-950/90 backdrop-blur-lg border-t border-white/15 rounded-b-2xl sm:rounded-b-3xl flex flex-col gap-1.5 pointer-events-auto shadow-2xl transition-all"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {/* Drawer Header: Category Pills + Calibration Toggle + Close Button */}
-                      <div className="flex items-center justify-between gap-1.5 max-w-full">
-                        {/* Category Filter Pills */}
-                        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
-                          {EFFECT_CATEGORIES.map((cat) => {
-                            const isCatActive = selectedCategory === cat.id;
-                            return (
-                              <button
-                                key={cat.id}
-                                onClick={() => setSelectedCategory(cat.id)}
-                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all ${
-                                  isCatActive
-                                    ? 'bg-rose-500 text-white shadow-2xs'
-                                    : 'text-stone-300 hover:text-white hover:bg-white/10'
-                                }`}
-                              >
-                                <span>{cat.icon} {cat.label}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        {/* Action Buttons: Calibrate & Close */}
-                        <div className="flex items-center gap-1 shrink-0">
-                          {selectedFaceEffect !== 'none' && (
-                            <button
-                              onClick={() => setShowCalibration(!showCalibration)}
-                              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all flex items-center gap-1 ${
-                                showCalibration
-                                  ? 'bg-amber-400 text-stone-950 font-bold shadow-xs'
-                                  : 'bg-white/10 hover:bg-white/20 text-stone-200'
-                              }`}
-                              title="Buka / Tutup Pengaturan Posisi & Ukuran Efek"
-                            >
-                              <Sliders className="w-2.5 h-2.5" />
-                              <span>{showCalibration ? 'Tutup Kalibrasi' : 'Atur Posisi'}</span>
-                            </button>
-                          )}
-                          <button
-                            onClick={() => {
-                              setShowEffectsBar(false);
-                              setShowCalibration(false);
-                            }}
-                            className="p-1 rounded-lg text-stone-400 hover:text-white hover:bg-white/15 transition"
-                            title="Tutup Pilihan Efek (Bersihkan Layar)"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Filter Buttons Carousel */}
-                      <div className="flex items-center gap-1.5 p-0.5 overflow-x-auto no-scrollbar">
-                        {(selectedCategory === 'all'
-                          ? FACE_EFFECTS
-                          : FACE_EFFECTS.filter((e) => e.id === 'none' || e.category === selectedCategory)
-                        ).map((eff) => {
-                          const isSelected = selectedFaceEffect === eff.id;
-                          return (
-                            <button
-                              key={eff.id}
-                              onClick={() => setSelectedFaceEffect(eff.id)}
-                              className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition-all shrink-0 ${
-                                isSelected
-                                  ? 'bg-rose-500 text-white shadow-md font-bold ring-2 ring-rose-400/60 scale-102'
-                                  : 'bg-white/5 text-stone-300 hover:text-white hover:bg-white/15'
-                              }`}
-                              title={eff.description}
-                            >
-                              <span className="text-sm leading-none">{eff.badge}</span>
-                              <span className="text-[11px]">{eff.shortLabel}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Collapsible Calibration Bar (Only shown when user clicks 'Atur Posisi') */}
-                      {showCalibration && selectedFaceEffect !== 'none' && (
-                        <div className="flex flex-wrap items-center justify-between gap-1 p-1 px-2 bg-white/5 rounded-xl border border-white/10 text-white text-[10px] sm:text-[11px]">
-                          <div className="flex items-center gap-1">
-                            <span className="font-bold text-amber-300 text-[10px]">Posisi:</span>
-                            <button
-                              onClick={() => {
-                                setFaceAutoTracking(false);
-                                setFaceOffsetY((prev) => prev - 0.03);
-                              }}
-                              className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
-                              title="Geser Efek Naik"
-                            >
-                              ▲ Naik
-                            </button>
-                            <button
-                              onClick={() => {
-                                setFaceAutoTracking(false);
-                                setFaceOffsetY((prev) => prev + 0.03);
-                              }}
-                              className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
-                              title="Geser Efek Turun"
-                            >
-                              ▼ Turun
-                            </button>
-                            <button
-                              onClick={() => {
-                                setFaceAutoTracking(false);
-                                setFaceOffsetX((prev) => prev - 0.03);
-                              }}
-                              className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
-                              title="Geser Efek Kiri"
-                            >
-                              ◀ Kiri
-                            </button>
-                            <button
-                              onClick={() => {
-                                setFaceAutoTracking(false);
-                                setFaceOffsetX((prev) => prev + 0.03);
-                              }}
-                              className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
-                              title="Geser Efek Kanan"
-                            >
-                              ▶ Kanan
-                            </button>
-                          </div>
-
-                          <div className="flex items-center gap-1">
-                            <span className="font-bold text-amber-300 text-[10px]">Ukuran:</span>
-                            <button
-                              onClick={() => setFaceScale((prev) => Math.max(0.6, Number((prev - 0.1).toFixed(2))))}
-                              className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
-                              title="Kecilkan Ukuran Efek"
-                            >
-                              −
-                            </button>
-                            <span className="font-mono text-amber-300 text-[10px] w-6 text-center font-bold">
-                              {Math.round(faceScale * 100)}%
-                            </span>
-                            <button
-                              onClick={() => setFaceScale((prev) => Math.min(1.6, Number((prev + 0.1).toFixed(2))))}
-                              className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
-                              title="Besarkan Ukuran Efek"
-                            >
-                              +
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                setFaceOffsetX(0);
-                                setFaceOffsetY(0);
-                                setFaceScale(1.0);
-                                setFaceAutoTracking(true);
-                              }}
-                              className="ml-1 px-2 py-0.5 rounded bg-rose-500 hover:bg-rose-600 text-white font-bold active:scale-95 transition flex items-center gap-1 shadow-xs"
-                              title="Kembalikan Posisi Otomatis ke Wajah"
-                            >
-                              <RefreshCw className="w-2.5 h-2.5" />
-                              <span>Auto-Pas</span>
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Subtle Minimal Filter Chip (when drawer is closed) */}
-                  {!showEffectsBar && selectedFaceEffect !== 'none' && !isCountingDown && (
-                    <div
-                      className="absolute top-3 left-1/2 -translate-x-1/2 z-20 hidden md:flex items-center gap-1.5 px-3 py-1 bg-stone-900/80 backdrop-blur-md rounded-full text-white text-[11px] font-medium border border-white/15 shadow-lg pointer-events-auto"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-                      <span className="font-semibold text-rose-300">
-                        {FACE_EFFECTS.find((f) => f.id === selectedFaceEffect)?.shortLabel || 'Efek'}
-                      </span>
-                      <button
-                        onClick={() => setShowEffectsBar(true)}
-                        className="ml-1 text-[10px] text-stone-300 hover:text-white px-1.5 py-0.5 rounded-md bg-white/10 hover:bg-white/20 transition font-bold"
-                      >
-                        Ganti
-                      </button>
-                      <button
-                        onClick={() => setSelectedFaceEffect('none')}
-                        className="text-stone-400 hover:text-rose-400 p-0.5 ml-0.5 transition"
-                        title="Lepas Efek"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
                     </div>
                   )}
                 </>
@@ -993,20 +697,6 @@ export default function CameraBooth({
                   >
                     <Focus className="w-3.5 h-3.5 text-emerald-400" />
                     <span className="hidden sm:inline">Fokus</span>
-                  </button>
-                  <button
-                    onClick={() => setShowEffectsBar(!showEffectsBar)}
-                    className={`px-2.5 sm:px-3 py-1.5 rounded-full backdrop-blur-xs transition flex items-center gap-1.5 text-xs font-semibold ${
-                      showEffectsBar
-                        ? 'bg-rose-500 text-white shadow-xs'
-                        : selectedFaceEffect !== 'none'
-                        ? 'bg-rose-500/25 text-rose-300 border border-rose-500/40 hover:bg-rose-500/35'
-                        : 'bg-stone-900/65 hover:bg-stone-900/85 text-white'
-                    }`}
-                    title="Buka / Tutup Pilihan Filter Wajah"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Filter</span>
                   </button>
                 </div>
               )}
@@ -1115,22 +805,6 @@ export default function CameraBooth({
 
             {/* Primary Shutter & Gallery Action Buttons */}
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <button
-                onClick={() => setShowEffectsBar(!showEffectsBar)}
-                className={`px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
-                  selectedFaceEffect !== 'none'
-                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                    : ringLightOn
-                    ? 'bg-stone-100 hover:bg-stone-200 text-stone-700'
-                    : 'bg-white/10 hover:bg-white/15 text-white'
-                }`}
-                title="Pilih Efek Filter Wajah (Kupu-kupu, Bunga, Kucing, dll)"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span className="hidden sm:inline">Efek:</span>
-                <span>{FACE_EFFECTS.find((f) => f.id === selectedFaceEffect)?.shortLabel || 'Filter'}</span>
-              </button>
-
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className={`px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
