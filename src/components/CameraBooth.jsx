@@ -15,7 +15,8 @@ import {
   Images,
   Maximize2,
   ArrowLeft,
-  Sparkles
+  Sparkles,
+  Sliders
 } from 'lucide-react';
 import { soundFX } from '../utils/audio';
 import {
@@ -81,11 +82,12 @@ export default function CameraBooth({
   const [autoLight, setAutoLight] = useState(true);
   const [focusPoint, setFocusPoint] = useState({ x: 0.5, y: 0.5 });
   const [focusState, setFocusState] = useState('locked'); // 'locking' | 'locked'
-  const [showFocusBox, setShowFocusBox] = useState(true);
+  const [showFocusBox, setShowFocusBox] = useState(false);
 
   // AR Face Filter State (Instagram Butterfly, Flower Crown, etc.)
   const [selectedFaceEffect, setSelectedFaceEffect] = useState('butterfly_ig');
-  const [showEffectsBar, setShowEffectsBar] = useState(true);
+  const [showEffectsBar, setShowEffectsBar] = useState(false);
+  const [showCalibration, setShowCalibration] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
 
   // Real-Time Face Tracking & Calibration State
@@ -202,7 +204,8 @@ export default function CameraBooth({
     if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
     focusTimerRef.current = setTimeout(() => {
       setFocusState('locked');
-    }, 420);
+      setTimeout(() => setShowFocusBox(false), 850);
+    }, 380);
   };
 
   const startCamera = async (mode = facingMode) => {
@@ -739,18 +742,19 @@ export default function CameraBooth({
                     />
                   )}
 
-                  {/* Interactive Auto-Focus & Auto-Exposure Reticle Box */}
-                  {showFocusBox && (
+                  {/* Interactive Auto-Focus & Auto-Exposure Reticle Box (Auto-fades in ~1.2s) */}
+                  {showFocusBox && !isCountingDown && (
                     <div
-                      className="absolute z-20 pointer-events-none transition-all duration-200"
+                      className="absolute z-20 pointer-events-none transition-all duration-300"
                       style={{
                         left: `${focusPoint.x * 100}%`,
                         top: `${focusPoint.y * 100}%`,
-                        transform: `translate(-50%, -50%) scale(${focusState === 'locking' ? 1.18 : 1})`
+                        transform: `translate(-50%, -50%) scale(${focusState === 'locking' ? 1.15 : 1})`,
+                        opacity: focusState === 'locking' ? 1 : 0.85
                       }}
                     >
                       <div
-                        className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border-2 relative flex items-center justify-center transition-colors ${
+                        className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 relative flex items-center justify-center transition-colors ${
                           focusState === 'locking'
                             ? 'border-amber-300 shadow-[0_0_12px_rgba(252,211,77,0.6)]'
                             : 'border-emerald-400/90 shadow-[0_0_10px_rgba(52,211,153,0.45)]'
@@ -766,36 +770,18 @@ export default function CameraBooth({
                     </div>
                   )}
 
-                  {/* Floating Instagram-Style AR Face Filter Carousel with Category Tabs */}
-                  {showEffectsBar && (
+                  {/* Sleek Docked Instagram-Style AR Face Filter Drawer */}
+                  {showEffectsBar && !isCountingDown && (
                     <div
-                      className="absolute bottom-11 sm:bottom-12 inset-x-0 z-30 px-2 sm:px-4 flex flex-col items-center gap-1.5 pointer-events-auto"
+                      className="absolute bottom-0 inset-x-0 z-30 p-2 sm:p-2.5 bg-stone-950/90 backdrop-blur-lg border-t border-white/15 rounded-b-2xl sm:rounded-b-3xl flex flex-col gap-1.5 pointer-events-auto shadow-2xl transition-all"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {/* Top Bar: Category Tabs + Active Filter Indicator */}
-                      <div className="flex flex-wrap items-center justify-center gap-1.5 max-w-full">
-                        {/* Active filter name pill */}
-                        <div className="bg-black/80 backdrop-blur-md text-white/95 px-3 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold border border-white/15 flex items-center gap-1.5 shadow-lg">
-                          <Sparkles className="w-3 h-3 text-amber-300" />
-                          <span>
-                            Filter:{' '}
-                            <strong className="text-rose-400">
-                              {FACE_EFFECTS.find((f) => f.id === selectedFaceEffect)?.name || 'Normal'}
-                            </strong>
-                          </span>
-                          {selectedFaceEffect !== 'none' && (
-                            <span className="text-stone-300 text-[10px] hidden sm:inline">• Klik layar untuk pas-kan posisi</span>
-                          )}
-                        </div>
-
+                      {/* Drawer Header: Category Pills + Calibration Toggle + Close Button */}
+                      <div className="flex items-center justify-between gap-1.5 max-w-full">
                         {/* Category Filter Pills */}
-                        <div className="flex items-center gap-1 p-0.5 bg-black/75 backdrop-blur-md rounded-xl border border-white/15 overflow-x-auto no-scrollbar shadow-md">
+                        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
                           {EFFECT_CATEGORIES.map((cat) => {
                             const isCatActive = selectedCategory === cat.id;
-                            const count =
-                              cat.id === 'all'
-                                ? FACE_EFFECTS.length - 1
-                                : FACE_EFFECTS.filter((e) => e.category === cat.id).length;
                             return (
                               <button
                                 key={cat.id}
@@ -807,15 +793,42 @@ export default function CameraBooth({
                                 }`}
                               >
                                 <span>{cat.icon} {cat.label}</span>
-                                <span className="opacity-70 text-[9px] ml-0.5">({count})</span>
                               </button>
                             );
                           })}
                         </div>
+
+                        {/* Action Buttons: Calibrate & Close */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {selectedFaceEffect !== 'none' && (
+                            <button
+                              onClick={() => setShowCalibration(!showCalibration)}
+                              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all flex items-center gap-1 ${
+                                showCalibration
+                                  ? 'bg-amber-400 text-stone-950 font-bold shadow-xs'
+                                  : 'bg-white/10 hover:bg-white/20 text-stone-200'
+                              }`}
+                              title="Buka / Tutup Pengaturan Posisi & Ukuran Efek"
+                            >
+                              <Sliders className="w-2.5 h-2.5" />
+                              <span>{showCalibration ? 'Tutup Kalibrasi' : 'Atur Posisi'}</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setShowEffectsBar(false);
+                              setShowCalibration(false);
+                            }}
+                            className="p-1 rounded-lg text-stone-400 hover:text-white hover:bg-white/15 transition"
+                            title="Tutup Pilihan Efek (Bersihkan Layar)"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
 
                       {/* Filter Buttons Carousel */}
-                      <div className="flex items-center gap-1.5 p-1 bg-black/75 backdrop-blur-md rounded-2xl border border-white/20 max-w-full overflow-x-auto no-scrollbar shadow-2xl">
+                      <div className="flex items-center gap-1.5 p-0.5 overflow-x-auto no-scrollbar">
                         {(selectedCategory === 'all'
                           ? FACE_EFFECTS
                           : FACE_EFFECTS.filter((e) => e.id === 'none' || e.category === selectedCategory)
@@ -825,189 +838,203 @@ export default function CameraBooth({
                             <button
                               key={eff.id}
                               onClick={() => setSelectedFaceEffect(eff.id)}
-                              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all shrink-0 ${
+                              className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition-all shrink-0 ${
                                 isSelected
-                                  ? 'bg-rose-500 text-white shadow-md scale-105 ring-2 ring-rose-400/60'
-                                  : 'text-stone-300 hover:text-white hover:bg-white/10'
+                                  ? 'bg-rose-500 text-white shadow-md font-bold ring-2 ring-rose-400/60 scale-102'
+                                  : 'bg-white/5 text-stone-300 hover:text-white hover:bg-white/15'
                               }`}
                               title={eff.description}
                             >
-                              <span className="text-base leading-none">{eff.badge}</span>
+                              <span className="text-sm leading-none">{eff.badge}</span>
                               <span className="text-[11px]">{eff.shortLabel}</span>
                             </button>
                           );
                         })}
                       </div>
 
-                      {/* Interactive Calibration & Face Fit Controls */}
-                      {selectedFaceEffect !== 'none' && (
-                        <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-1.5 p-1 px-2 bg-black/80 backdrop-blur-md rounded-xl border border-white/20 text-white text-[10px] sm:text-[11px] shadow-lg max-w-full">
-                          <span className="font-bold text-amber-300">Posisi:</span>
-                          <button
-                            onClick={() => {
-                              setFaceAutoTracking(false);
-                              setFaceOffsetY((prev) => prev - 0.03);
-                            }}
-                            className="px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
-                            title="Geser Efek Naik"
-                          >
-                            ▲ Naik
-                          </button>
-                          <button
-                            onClick={() => {
-                              setFaceAutoTracking(false);
-                              setFaceOffsetY((prev) => prev + 0.03);
-                            }}
-                            className="px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
-                            title="Geser Efek Turun"
-                          >
-                            ▼ Turun
-                          </button>
-                          <button
-                            onClick={() => {
-                              setFaceAutoTracking(false);
-                              setFaceOffsetX((prev) => prev - 0.03);
-                            }}
-                            className="px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
-                            title="Geser Efek Kiri"
-                          >
-                            ◀ Kiri
-                          </button>
-                          <button
-                            onClick={() => {
-                              setFaceAutoTracking(false);
-                              setFaceOffsetX((prev) => prev + 0.03);
-                            }}
-                            className="px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
-                            title="Geser Efek Kanan"
-                          >
-                            ▶ Kanan
-                          </button>
+                      {/* Collapsible Calibration Bar (Only shown when user clicks 'Atur Posisi') */}
+                      {showCalibration && selectedFaceEffect !== 'none' && (
+                        <div className="flex flex-wrap items-center justify-between gap-1 p-1 px-2 bg-white/5 rounded-xl border border-white/10 text-white text-[10px] sm:text-[11px]">
+                          <div className="flex items-center gap-1">
+                            <span className="font-bold text-amber-300 text-[10px]">Posisi:</span>
+                            <button
+                              onClick={() => {
+                                setFaceAutoTracking(false);
+                                setFaceOffsetY((prev) => prev - 0.03);
+                              }}
+                              className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
+                              title="Geser Efek Naik"
+                            >
+                              ▲ Naik
+                            </button>
+                            <button
+                              onClick={() => {
+                                setFaceAutoTracking(false);
+                                setFaceOffsetY((prev) => prev + 0.03);
+                              }}
+                              className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
+                              title="Geser Efek Turun"
+                            >
+                              ▼ Turun
+                            </button>
+                            <button
+                              onClick={() => {
+                                setFaceAutoTracking(false);
+                                setFaceOffsetX((prev) => prev - 0.03);
+                              }}
+                              className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
+                              title="Geser Efek Kiri"
+                            >
+                              ◀ Kiri
+                            </button>
+                            <button
+                              onClick={() => {
+                                setFaceAutoTracking(false);
+                                setFaceOffsetX((prev) => prev + 0.03);
+                              }}
+                              className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
+                              title="Geser Efek Kanan"
+                            >
+                              ▶ Kanan
+                            </button>
+                          </div>
 
-                          <div className="h-3 w-px bg-white/20 mx-0.5 hidden sm:block" />
+                          <div className="flex items-center gap-1">
+                            <span className="font-bold text-amber-300 text-[10px]">Ukuran:</span>
+                            <button
+                              onClick={() => setFaceScale((prev) => Math.max(0.6, Number((prev - 0.1).toFixed(2))))}
+                              className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
+                              title="Kecilkan Ukuran Efek"
+                            >
+                              −
+                            </button>
+                            <span className="font-mono text-amber-300 text-[10px] w-6 text-center font-bold">
+                              {Math.round(faceScale * 100)}%
+                            </span>
+                            <button
+                              onClick={() => setFaceScale((prev) => Math.min(1.6, Number((prev + 0.1).toFixed(2))))}
+                              className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
+                              title="Besarkan Ukuran Efek"
+                            >
+                              +
+                            </button>
 
-                          <span className="font-bold text-amber-300">Ukuran:</span>
-                          <button
-                            onClick={() => setFaceScale((prev) => Math.max(0.6, Number((prev - 0.1).toFixed(2))))}
-                            className="px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
-                            title="Kecilkan Ukuran Efek"
-                          >
-                            − Kecil
-                          </button>
-                          <span className="font-mono text-amber-300 w-7 text-center font-bold">
-                            {Math.round(faceScale * 100)}%
-                          </span>
-                          <button
-                            onClick={() => setFaceScale((prev) => Math.min(1.6, Number((prev + 0.1).toFixed(2))))}
-                            className="px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 font-bold active:scale-95 transition"
-                            title="Besarkan Ukuran Efek"
-                          >
-                            + Besar
-                          </button>
-
-                          <div className="h-3 w-px bg-white/20 mx-0.5 hidden sm:block" />
-
-                          <button
-                            onClick={() => {
-                              setFaceOffsetX(0);
-                              setFaceOffsetY(0);
-                              setFaceScale(1.0);
-                              setFaceAutoTracking(true);
-                            }}
-                            className="px-2 py-0.5 rounded-md bg-rose-500 hover:bg-rose-600 text-white font-bold active:scale-95 transition flex items-center gap-1 shadow-xs"
-                            title="Kembalikan Posisi Otomatis ke Wajah"
-                          >
-                            <RefreshCw className="w-2.5 h-2.5" />
-                            <span>Auto-Pas</span>
-                          </button>
+                            <button
+                              onClick={() => {
+                                setFaceOffsetX(0);
+                                setFaceOffsetY(0);
+                                setFaceScale(1.0);
+                                setFaceAutoTracking(true);
+                              }}
+                              className="ml-1 px-2 py-0.5 rounded bg-rose-500 hover:bg-rose-600 text-white font-bold active:scale-95 transition flex items-center gap-1 shadow-xs"
+                              title="Kembalikan Posisi Otomatis ke Wajah"
+                            >
+                              <RefreshCw className="w-2.5 h-2.5" />
+                              <span>Auto-Pas</span>
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
                   )}
 
-                  {/* Live Auto-Focus & Auto-Cahaya Status Pill */}
-                  <div className="absolute bottom-3 left-3 z-20 pointer-events-none flex items-center gap-1.5 bg-stone-900/75 backdrop-blur-xs text-white px-3 py-1 rounded-full text-[11px] font-semibold border border-white/15">
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        focusState === 'locking'
-                          ? 'bg-amber-400 animate-ping'
-                          : sceneInfo.status === 'BRIGHT'
-                          ? 'bg-sky-400'
-                          : sceneInfo.status === 'LOW_LIGHT'
-                          ? 'bg-amber-400'
-                          : 'bg-emerald-400'
-                      }`}
-                    />
-                    <span>{sceneInfo.label}</span>
-                  </div>
-
-                  {/* Active Slot Indicator Pill in Bottom-Right */}
-                  <div className="absolute bottom-3 right-3 z-20 pointer-events-none bg-stone-900/75 backdrop-blur-xs text-white px-3 py-1 rounded-full text-[11px] font-bold border border-white/15">
-                    Target: Slot #{currentSlotIndex + 1} dari {totalSlots}
-                  </div>
+                  {/* Subtle Minimal Filter Chip (when drawer is closed) */}
+                  {!showEffectsBar && selectedFaceEffect !== 'none' && !isCountingDown && (
+                    <div
+                      className="absolute top-3 left-1/2 -translate-x-1/2 z-20 hidden md:flex items-center gap-1.5 px-3 py-1 bg-stone-900/80 backdrop-blur-md rounded-full text-white text-[11px] font-medium border border-white/15 shadow-lg pointer-events-auto"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                      <span className="font-semibold text-rose-300">
+                        {FACE_EFFECTS.find((f) => f.id === selectedFaceEffect)?.shortLabel || 'Efek'}
+                      </span>
+                      <button
+                        onClick={() => setShowEffectsBar(true)}
+                        className="ml-1 text-[10px] text-stone-300 hover:text-white px-1.5 py-0.5 rounded-md bg-white/10 hover:bg-white/20 transition font-bold"
+                      >
+                        Ganti
+                      </button>
+                      <button
+                        onClick={() => setSelectedFaceEffect('none')}
+                        className="text-stone-400 hover:text-rose-400 p-0.5 ml-0.5 transition"
+                        title="Lepas Efek"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
 
               {/* Top-Left Camera Controls: Flip, Mirror, Re-Focus, Filter Toggle */}
-              {!cameraError && (
+              {!cameraError && !isCountingDown && (
                 <div
-                  className="absolute top-3 left-3 z-20 flex flex-wrap gap-1.5"
+                  className="absolute top-3 left-3 z-20 flex items-center gap-1.5"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
                     onClick={handleToggleFacing}
-                    className="p-2.5 rounded-full bg-stone-900/65 hover:bg-stone-900/85 text-white backdrop-blur-xs transition"
+                    className="p-2 sm:p-2.5 rounded-full bg-stone-900/65 hover:bg-stone-900/85 text-white backdrop-blur-xs transition"
                     title="Putar Kamera"
                   >
-                    <RefreshCw className="w-4 h-4" />
+                    <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </button>
                   <button
                     onClick={() => setIsMirrored(!isMirrored)}
-                    className="p-2.5 rounded-full bg-stone-900/65 hover:bg-stone-900/85 text-white backdrop-blur-xs transition"
+                    className="p-2 sm:p-2.5 rounded-full bg-stone-900/65 hover:bg-stone-900/85 text-white backdrop-blur-xs transition"
                     title="Mirror"
                   >
-                    <FlipHorizontal className="w-4 h-4" />
+                    <FlipHorizontal className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </button>
                   <button
                     onClick={() => triggerAutoFocusLock({ x: 0.5, y: 0.5 })}
-                    className="px-3 py-1.5 rounded-full bg-stone-900/65 hover:bg-stone-900/85 text-white backdrop-blur-xs transition flex items-center gap-1.5 text-xs font-semibold"
+                    className="px-2.5 sm:px-3 py-1.5 rounded-full bg-stone-900/65 hover:bg-stone-900/85 text-white backdrop-blur-xs transition flex items-center gap-1.5 text-xs font-semibold"
                     title="Kunci Ulang Auto-Fokus & Cahaya"
                   >
                     <Focus className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Auto-Fokus</span>
+                    <span className="hidden sm:inline">Fokus</span>
                   </button>
                   <button
                     onClick={() => setShowEffectsBar(!showEffectsBar)}
-                    className={`px-3 py-1.5 rounded-full backdrop-blur-xs transition flex items-center gap-1.5 text-xs font-semibold ${
-                      selectedFaceEffect !== 'none'
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-full backdrop-blur-xs transition flex items-center gap-1.5 text-xs font-semibold ${
+                      showEffectsBar
                         ? 'bg-rose-500 text-white shadow-xs'
+                        : selectedFaceEffect !== 'none'
+                        ? 'bg-rose-500/25 text-rose-300 border border-rose-500/40 hover:bg-rose-500/35'
                         : 'bg-stone-900/65 hover:bg-stone-900/85 text-white'
                     }`}
                     title="Buka / Tutup Pilihan Filter Wajah"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Filter {selectedFaceEffect !== 'none' ? 'Aktif' : ''}</span>
+                    <span>Filter</span>
                   </button>
                 </div>
               )}
 
-              {/* Top-Right Timer Toggle */}
-              <div
-                className="absolute top-3 right-3 z-20 flex bg-stone-900/65 backdrop-blur-xs rounded-full p-0.5 text-xs text-white border border-white/10"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {[3, 5].map((sec) => (
-                  <button
-                    key={sec}
-                    onClick={() => setDelaySec(sec)}
-                    className={`px-2.5 py-1 rounded-full font-mono transition ${
-                      delaySec === sec ? 'bg-white text-stone-900 font-bold' : 'text-stone-300'
-                    }`}
-                  >
-                    {sec}s
-                  </button>
-                ))}
-              </div>
+              {/* Top-Right Timer & Target Slot Indicator */}
+              {!isCountingDown && (
+                <div
+                  className="absolute top-3 right-3 z-20 flex items-center gap-1.5 sm:gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="bg-stone-900/75 backdrop-blur-xs text-white px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-bold border border-white/15">
+                    Slot #{currentSlotIndex + 1}/{totalSlots}
+                  </div>
+                  <div className="flex bg-stone-900/65 backdrop-blur-xs rounded-full p-0.5 text-xs text-white border border-white/10">
+                    {[3, 5].map((sec) => (
+                      <button
+                        key={sec}
+                        onClick={() => setDelaySec(sec)}
+                        className={`px-2 sm:px-2.5 py-0.5 rounded-full font-mono transition ${
+                          delaySec === sec ? 'bg-white text-stone-900 font-bold' : 'text-stone-300'
+                        }`}
+                      >
+                        {sec}s
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1069,6 +1096,19 @@ export default function CameraBooth({
                   <span className="font-mono text-[10px] opacity-75 w-7 text-right">
                     {manualExposure > 0 ? `+${manualExposure}` : manualExposure}
                   </span>
+                </div>
+
+                <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-white/10 shrink-0">
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      sceneInfo.status === 'BRIGHT'
+                        ? 'bg-sky-400'
+                        : sceneInfo.status === 'LOW_LIGHT'
+                        ? 'bg-amber-400'
+                        : 'bg-emerald-400'
+                    }`}
+                  />
+                  <span>{sceneInfo.label}</span>
                 </div>
               </div>
             )}
