@@ -13,6 +13,14 @@ export const AR_FILTERS = [
     description: 'Kamera HD Natural tanpa filter AR'
   },
   {
+    id: 'pink_tea',
+    name: 'Pink Tea :-)',
+    tag: 'pink tea :-)',
+    icon: '🤎',
+    badge: 'Trending',
+    description: 'Mahkota hati wine-burgundy bertingkat viral "pink tea :-)" & warm rose blush'
+  },
+  {
     id: 'glitter_dog',
     name: 'Glitter Puppy',
     tag: '!) Glitter pack',
@@ -642,6 +650,111 @@ function renderHeartCrown(ctx, pose, time) {
 }
 
 /**
+ * Filter 5: Pink Tea :-) (pink tea :-) by dingmintt)
+ * Multi-tiered cluster of velvety wine-burgundy hearts hugging hairline/crown,
+ * warm Korean-style tea blush across cheeks & nose tip
+ */
+function renderPinkTea(ctx, pose, time) {
+  const { angle, eyeDist, forehead, leftCheek, rightCheek, noseTip, upVector } = pose;
+
+  // 1. Warm Rosy-Tea Cheek & Nose Blush
+  const blushRadius = eyeDist * 0.44;
+  drawSoftBlush(ctx, leftCheek.x, leftCheek.y, blushRadius, blushRadius * 0.72, angle, 'rgba(215, 78, 98, 0.32)');
+  drawSoftBlush(ctx, rightCheek.x, rightCheek.y, blushRadius, blushRadius * 0.72, angle, 'rgba(215, 78, 98, 0.32)');
+  drawSoftBlush(ctx, noseTip.x, noseTip.y - eyeDist * 0.08, eyeDist * 0.22, eyeDist * 0.14, angle, 'rgba(215, 78, 98, 0.22)');
+
+  // 2. Multi-Tiered Dense Cluster of Velvet Wine-Red Hearts
+  // Hugging tightly over the hairline / crown as in reference screenshot
+  const crownBase = {
+    x: forehead.x + upVector.x * (eyeDist * 0.14),
+    y: forehead.y + upVector.y * (eyeDist * 0.14)
+  };
+  const baseArcRadius = eyeDist * 0.76;
+
+  const pinkTeaHearts = [
+    // Far-left flank floating above temple/ear
+    { t: -0.92, rMult: 0.85, sizeMult: 0.36, rotOffset: -0.32, colorTop: '#8c2239', colorBot: '#661424', bobPhase: 0.2 },
+    // Mid-left lower tier
+    { t: -0.74, rMult: 0.82, sizeMult: 0.32, rotOffset: -0.24, colorTop: '#9a2842', colorBot: '#70172a', bobPhase: 1.1 },
+    // Mid-left tiny accent nestled low
+    { t: -0.60, rMult: 0.68, sizeMult: 0.20, rotOffset: -0.16, colorTop: '#ab324c', colorBot: '#7e1b30', bobPhase: 2.3 },
+    // Mid-left upper tier (prominent heart)
+    { t: -0.46, rMult: 1.05, sizeMult: 0.44, rotOffset: -0.18, colorTop: '#831e34', colorBot: '#5e1121', bobPhase: 0.8 },
+    // Center-left apex (high heart)
+    { t: -0.24, rMult: 1.12, sizeMult: 0.48, rotOffset: -0.06, colorTop: '#92233c', colorBot: '#681526', bobPhase: 1.7 },
+    // Center-left lower accent tucked below
+    { t: -0.12, rMult: 0.78, sizeMult: 0.24, rotOffset: 0.04, colorTop: '#a42a45', colorBot: '#77182c', bobPhase: 3.1 },
+    // Center-right apex (high prominent heart)
+    { t: 0.10, rMult: 1.08, sizeMult: 0.46, rotOffset: 0.10, colorTop: '#831e34', colorBot: '#5e1121', bobPhase: 0.5 },
+    // Mid-right upper tier
+    { t: 0.28, rMult: 1.04, sizeMult: 0.44, rotOffset: 0.20, colorTop: '#90223a', colorBot: '#681526', bobPhase: 2.0 },
+    // Mid-right lower accent
+    { t: 0.35, rMult: 0.74, sizeMult: 0.22, rotOffset: 0.16, colorTop: '#a22944', colorBot: '#76182c', bobPhase: 1.4 },
+    // Right upper tier
+    { t: 0.50, rMult: 0.98, sizeMult: 0.42, rotOffset: 0.26, colorTop: '#841f35', colorBot: '#601222', bobPhase: 2.7 },
+    // Right mid tier
+    { t: 0.66, rMult: 0.85, sizeMult: 0.32, rotOffset: 0.30, colorTop: '#92233c', colorBot: '#6c1628', bobPhase: 0.9 },
+    // Right lower accent
+    { t: 0.78, rMult: 0.72, sizeMult: 0.24, rotOffset: 0.36, colorTop: '#a62c47', colorBot: '#7a192f', bobPhase: 1.9 },
+    // Far-right flank floating above right temple/ear
+    { t: 0.88, rMult: 0.64, sizeMult: 0.20, rotOffset: 0.42, colorTop: '#8c2239', colorBot: '#661424', bobPhase: 3.3 }
+  ];
+
+  const cosA = Math.cos(angle);
+  const sinA = Math.sin(angle);
+
+  pinkTeaHearts.forEach((h, idx) => {
+    // Breathing floating motion
+    const bob = Math.sin(time * 2.8 + h.bobPhase) * (eyeDist * 0.022);
+    const r = baseArcRadius * h.rMult + bob;
+
+    // Heart position along curved head arc in local coordinates
+    const localX = Math.sin(h.t) * r;
+    const localY = -Math.cos(h.t) * r * 0.62;
+
+    // World coordinates aligned with head roll angle
+    const hx = crownBase.x + (localX * cosA - localY * sinA);
+    const hy = crownBase.y + (localX * sinA + localY * cosA);
+
+    const heartSize = eyeDist * h.sizeMult * (1 + 0.04 * Math.sin(time * 3 + idx));
+    const rot = angle + h.rotOffset;
+
+    ctx.save();
+    ctx.translate(hx, hy);
+    ctx.rotate(rot);
+
+    // Matte velvet drop shadow
+    ctx.shadowColor = 'rgba(50, 10, 20, 0.38)';
+    ctx.shadowBlur = 7;
+    ctx.shadowOffsetY = 2;
+
+    // Velvet gradient fill
+    const grad = ctx.createLinearGradient(0, -heartSize * 0.4, 0, heartSize * 0.6);
+    grad.addColorStop(0, h.colorTop);
+    grad.addColorStop(1, h.colorBot);
+    ctx.fillStyle = grad;
+
+    // Heart path
+    ctx.beginPath();
+    const s = heartSize / 2;
+    ctx.moveTo(0, s * 0.35);
+    ctx.bezierCurveTo(-s * 0.92, -s * 0.52, -s * 1.08, s * 0.5, 0, s * 1.18);
+    ctx.bezierCurveTo(s * 1.08, s * 0.5, s * 0.92, -s * 0.52, 0, s * 0.35);
+    ctx.closePath();
+    ctx.fill();
+
+    // Subtle matte rim highlight
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255, 180, 200, 0.18)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.restore();
+  });
+}
+
+/**
  * Master entry point: Renders the active AR filter onto any Canvas 2D context
  * @param {CanvasRenderingContext2D} ctx
  * @param {string} filterId
@@ -657,6 +770,9 @@ export function renderARFilter(ctx, filterId, poses, time = 0, width = 640, heig
 
   poses.forEach((pose) => {
     switch (filterId) {
+      case 'pink_tea':
+        renderPinkTea(ctx, pose, time);
+        break;
       case 'glitter_dog':
         renderGlitterDog(ctx, pose, time);
         break;
