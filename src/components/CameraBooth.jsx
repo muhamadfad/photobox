@@ -23,6 +23,7 @@ import {
   processIntelligentCapture
 } from '../utils/filterEngine';
 import {
+  EFFECT_CATEGORIES,
   FACE_EFFECTS,
   FaceEffectOverlay,
   renderFaceEffectToCanvas
@@ -84,6 +85,7 @@ export default function CameraBooth({
   // AR Face Filter State (Instagram Butterfly, Flower Crown, etc.)
   const [selectedFaceEffect, setSelectedFaceEffect] = useState('butterfly_ig');
   const [showEffectsBar, setShowEffectsBar] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState('all');
 
   // Dynamic AR Face Anchor (follows user auto-focus tap / centered default)
   const faceAnchor = {
@@ -698,29 +700,60 @@ export default function CameraBooth({
                     </div>
                   )}
 
-                  {/* Floating Instagram-Style AR Face Filter Carousel */}
+                  {/* Floating Instagram-Style AR Face Filter Carousel with Category Tabs */}
                   {showEffectsBar && (
                     <div
-                      className="absolute bottom-11 sm:bottom-12 inset-x-0 z-30 px-3 flex flex-col items-center gap-1 pointer-events-auto"
+                      className="absolute bottom-11 sm:bottom-12 inset-x-0 z-30 px-2 sm:px-4 flex flex-col items-center gap-1.5 pointer-events-auto"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {/* Active filter name pill */}
-                      <div className="bg-black/75 backdrop-blur-md text-white/95 px-3 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold border border-white/15 flex items-center gap-1.5 shadow-lg">
-                        <Sparkles className="w-3 h-3 text-amber-300" />
-                        <span>
-                          Filter:{' '}
-                          <strong className="text-rose-400">
-                            {FACE_EFFECTS.find((f) => f.id === selectedFaceEffect)?.name || 'Normal'}
-                          </strong>
-                        </span>
-                        {selectedFaceEffect !== 'none' && (
-                          <span className="text-stone-300 text-[10px] hidden sm:inline">• Klik layar untuk pas-kan posisi</span>
-                        )}
+                      {/* Top Bar: Category Tabs + Active Filter Indicator */}
+                      <div className="flex flex-wrap items-center justify-center gap-1.5 max-w-full">
+                        {/* Active filter name pill */}
+                        <div className="bg-black/80 backdrop-blur-md text-white/95 px-3 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold border border-white/15 flex items-center gap-1.5 shadow-lg">
+                          <Sparkles className="w-3 h-3 text-amber-300" />
+                          <span>
+                            Filter:{' '}
+                            <strong className="text-rose-400">
+                              {FACE_EFFECTS.find((f) => f.id === selectedFaceEffect)?.name || 'Normal'}
+                            </strong>
+                          </span>
+                          {selectedFaceEffect !== 'none' && (
+                            <span className="text-stone-300 text-[10px] hidden sm:inline">• Klik layar untuk pas-kan posisi</span>
+                          )}
+                        </div>
+
+                        {/* Category Filter Pills */}
+                        <div className="flex items-center gap-1 p-0.5 bg-black/75 backdrop-blur-md rounded-xl border border-white/15 overflow-x-auto no-scrollbar shadow-md">
+                          {EFFECT_CATEGORIES.map((cat) => {
+                            const isCatActive = selectedCategory === cat.id;
+                            const count =
+                              cat.id === 'all'
+                                ? FACE_EFFECTS.length - 1
+                                : FACE_EFFECTS.filter((e) => e.category === cat.id).length;
+                            return (
+                              <button
+                                key={cat.id}
+                                onClick={() => setSelectedCategory(cat.id)}
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all ${
+                                  isCatActive
+                                    ? 'bg-rose-500 text-white shadow-2xs'
+                                    : 'text-stone-300 hover:text-white hover:bg-white/10'
+                                }`}
+                              >
+                                <span>{cat.icon} {cat.label}</span>
+                                <span className="opacity-70 text-[9px] ml-0.5">({count})</span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
 
                       {/* Filter Buttons Carousel */}
-                      <div className="flex items-center gap-1.5 p-1 bg-black/70 backdrop-blur-md rounded-2xl border border-white/20 max-w-full overflow-x-auto no-scrollbar shadow-2xl">
-                        {FACE_EFFECTS.map((eff) => {
+                      <div className="flex items-center gap-1.5 p-1 bg-black/75 backdrop-blur-md rounded-2xl border border-white/20 max-w-full overflow-x-auto no-scrollbar shadow-2xl">
+                        {(selectedCategory === 'all'
+                          ? FACE_EFFECTS
+                          : FACE_EFFECTS.filter((e) => e.id === 'none' || e.category === selectedCategory)
+                        ).map((eff) => {
                           const isSelected = selectedFaceEffect === eff.id;
                           return (
                             <button
