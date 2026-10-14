@@ -103,16 +103,21 @@ export default function CameraBooth({
   const [faceOffsetX, setFaceOffsetX] = useState(0); // -0.3 to +0.3
 
   // Effective Dynamic AR Face Anchor (Combines real-time detection + manual nudges)
+  const effCy = Math.max(0.08, Math.min(0.92, detectedFace.cy + faceOffsetY));
+  const effFw = Math.max(0.12, Math.min(0.65, detectedFace.fw * faceScale));
+  const effFh = Math.max(0.16, Math.min(0.85, detectedFace.fh * faceScale));
   const baseTop = detectedFace.top != null ? detectedFace.top : (detectedFace.cy - detectedFace.fh * 0.5);
   const baseBottom = detectedFace.bottom != null ? detectedFace.bottom : (detectedFace.cy + detectedFace.fh * 0.5);
+  const halfDistTop = Math.max(0.08, detectedFace.cy - baseTop);
+  const halfDistBottom = Math.max(0.08, baseBottom - detectedFace.cy);
 
   const faceAnchor = {
     cx: Math.max(0.08, Math.min(0.92, detectedFace.cx + faceOffsetX)),
-    cy: Math.max(0.08, Math.min(0.92, detectedFace.cy + faceOffsetY)),
-    fw: Math.max(0.12, Math.min(0.65, detectedFace.fw * faceScale)),
-    fh: Math.max(0.16, Math.min(0.85, detectedFace.fh * faceScale)),
-    top: Math.max(0.02, Math.min(0.85, baseTop + faceOffsetY)),
-    bottom: Math.max(0.15, Math.min(0.98, baseBottom + faceOffsetY))
+    cy: effCy,
+    fw: effFw,
+    fh: effFh,
+    top: Math.max(0.02, Math.min(0.85, effCy - halfDistTop * faceScale)),
+    bottom: Math.max(0.15, Math.min(0.98, effCy + halfDistBottom * faceScale))
   };
 
   const videoRef = useRef(null);
