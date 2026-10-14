@@ -661,17 +661,17 @@ export default function CameraBooth({
       {/* VIEW 1: FULL-SCREEN CAMERA STUDIO + LIVE GALLERY & SLOT SIDEBAR       */}
       {/* ===================================================================== */}
       <div
-        className={`flex-1 min-h-0 flex flex-col lg:flex-row gap-3 sm:gap-4 p-2.5 sm:p-4 overflow-y-auto lg:overflow-hidden ${
+        className={`flex-1 min-h-0 flex flex-col lg:flex-row gap-2 sm:gap-3 p-1.5 sm:p-2.5 overflow-y-auto lg:overflow-hidden ${
           viewMode === 'camera' ? '' : 'hidden'
         }`}
       >
         {/* Main Full-Screen Camera Stage */}
-        <div className="flex-1 min-h-0 flex flex-col justify-between gap-2.5">
-          {/* Huge 4:3 Viewfinder Container */}
-          <div className="flex-1 min-h-[260px] flex items-center justify-center overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col justify-between gap-1.5 sm:gap-2 overflow-hidden">
+          {/* Huge 4:3 Viewfinder Container (Dynamically constrained to available height & width - no clipping) */}
+          <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden my-auto py-0.5">
             <div
               onClick={handleViewfinderTap}
-              className="relative w-full h-full max-h-full aspect-[4/3] max-w-[1080px] mx-auto bg-stone-900 rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center cursor-crosshair select-none border border-white/10 shadow-2xl"
+              className="relative h-full max-h-full max-w-full aspect-[4/3] mx-auto bg-stone-900 rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center cursor-crosshair select-none border border-white/10 shadow-2xl"
               style={{
                 boxShadow: ringLightOn
                   ? '0 0 0 10px rgba(255, 248, 235, 0.95), 0 20px 60px rgba(0,0,0,0.25)'
@@ -838,7 +838,7 @@ export default function CameraBooth({
           {!cameraError && (
             <div className="shrink-0 flex items-center justify-center py-0.5">
               <div
-                className={`flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 rounded-2xl border backdrop-blur-md shadow-md max-w-full overflow-x-auto no-scrollbar ${
+                className={`flex items-center gap-1 sm:gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl sm:rounded-2xl border backdrop-blur-md shadow-md max-w-full overflow-x-auto no-scrollbar ${
                   ringLightOn
                     ? 'bg-white/95 border-amber-200 text-stone-800'
                     : 'bg-stone-900/85 border-white/10 text-white'
@@ -855,20 +855,20 @@ export default function CameraBooth({
                     <button
                       key={f.id}
                       onClick={() => setSelectedARFilter(f.id)}
-                      className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                      className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.2 rounded-lg sm:rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
                         isActive
-                          ? 'bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md shadow-rose-500/30 scale-[1.04]'
+                          ? 'bg-gradient-to-r from-rose-500 to-pink-500 text-white shadow-md shadow-rose-500/30 scale-[1.03]'
                           : ringLightOn
                           ? 'bg-stone-100 hover:bg-stone-200 text-stone-700'
                           : 'bg-white/5 hover:bg-white/10 text-stone-300 hover:text-white'
                       }`}
                       title={f.description}
                     >
-                      <span className="text-sm select-none">{f.icon}</span>
+                      <span className="text-xs sm:text-sm select-none">{f.icon}</span>
                       <span className="text-[11px] sm:text-xs whitespace-nowrap">{f.name}</span>
                       {f.badge && f.id !== 'none' && (
                         <span
-                          className={`text-[9px] px-1.5 py-0.2 rounded-full font-semibold uppercase tracking-wider ${
+                          className={`text-[8px] sm:text-[9px] px-1.5 py-0.2 rounded-full font-semibold uppercase tracking-wider ${
                             isActive ? 'bg-white/25 text-white' : 'bg-white/10 text-stone-400'
                           }`}
                         >
@@ -884,7 +884,7 @@ export default function CameraBooth({
 
           {/* Bottom Camera Control Dock (Exposure + Shutter Buttons) */}
           <div
-            className={`shrink-0 rounded-2xl p-2.5 sm:p-3 border flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 ${
+            className={`shrink-0 rounded-xl sm:rounded-2xl p-2 sm:p-2.5 border flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 ${
               ringLightOn
                 ? 'bg-white border-amber-200 text-stone-800'
                 : 'bg-stone-900/90 border-white/10 text-white'
@@ -892,7 +892,7 @@ export default function CameraBooth({
           >
             {/* Exposure Mode & Slider */}
             {!cameraError && (
-              <div className="flex items-center gap-2.5 flex-1 max-w-md">
+              <div className="flex items-center gap-2 sm:gap-2.5 flex-1 max-w-md">
                 <div
                   className={`flex items-center p-0.5 rounded-xl shrink-0 ${
                     ringLightOn ? 'bg-stone-100' : 'bg-black/50 border border-white/10'
@@ -900,7 +900,7 @@ export default function CameraBooth({
                 >
                   <button
                     onClick={() => setAutoLight(true)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition ${
+                    className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[10px] sm:text-[11px] font-semibold transition ${
                       autoLight
                         ? 'bg-rose-500 text-white shadow-2xs'
                         : ringLightOn
@@ -915,7 +915,7 @@ export default function CameraBooth({
                       setAutoLight(false);
                       setManualExposure(0);
                     }}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition ${
+                    className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[10px] sm:text-[11px] font-semibold transition ${
                       !autoLight
                         ? 'bg-rose-500 text-white shadow-2xs'
                         : ringLightOn
@@ -927,8 +927,8 @@ export default function CameraBooth({
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2 flex-1">
-                  <span className="text-[11px] font-semibold opacity-75 shrink-0">Cahaya</span>
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-1">
+                  <span className="text-[10px] sm:text-[11px] font-semibold opacity-75 shrink-0">Cahaya</span>
                   <input
                     type="range"
                     min="-25"
@@ -942,7 +942,7 @@ export default function CameraBooth({
                   </span>
                 </div>
 
-                <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-white/10 shrink-0">
+                <div className="hidden lg:flex items-center gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[10px] font-semibold bg-white/10 shrink-0">
                   <span
                     className={`w-1.5 h-1.5 rounded-full ${
                       sceneInfo.status === 'BRIGHT'
@@ -958,10 +958,10 @@ export default function CameraBooth({
             )}
 
             {/* Primary Shutter & Gallery Action Buttons */}
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className={`px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
+                className={`px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
                   ringLightOn
                     ? 'bg-stone-100 hover:bg-stone-200 text-stone-700'
                     : 'bg-white/10 hover:bg-white/15 text-white'
@@ -974,7 +974,7 @@ export default function CameraBooth({
               <button
                 onClick={triggerSingleShot}
                 disabled={isCountingDown}
-                className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition disabled:opacity-50 ${
+                className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition disabled:opacity-50 ${
                   ringLightOn
                     ? 'bg-stone-900 hover:bg-black text-white'
                     : 'bg-white text-stone-950 hover:bg-stone-200'
@@ -987,7 +987,7 @@ export default function CameraBooth({
               <button
                 onClick={startBurstSequence}
                 disabled={isCountingDown}
-                className="px-4 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-md transition disabled:opacity-50"
+                className="px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-md transition disabled:opacity-50"
               >
                 <Play className="w-3.5 h-3.5 fill-white" />
                 <span>Auto {totalSlots}x Foto</span>
@@ -996,7 +996,7 @@ export default function CameraBooth({
               {sessionPhotos.length > 0 && (
                 <button
                   onClick={() => setViewMode('select')}
-                  className="px-3.5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
+                  className="px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
                 >
                   <Images className="w-3.5 h-3.5" />
                   <span>Pilih Foto ({sessionPhotos.length})</span>

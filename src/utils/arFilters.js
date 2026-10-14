@@ -679,52 +679,92 @@ function renderGlitterDog(ctx, pose, time) {
     drawSparkleStar(ctx, gx, gy, (eyeDist * 0.065) * (0.6 + 0.4 * pulse), 0.5 + 0.5 * pulse, time * 0.4 + idx);
   });
 
-  // 3. Floppy Caramel Dog Ears naturally attached to top corners of head
-  const earDist = eyeDist * 0.64;
+  // 3. Floppy Caramel Dog Ears naturally attached to top corners of head (elevated above hair)
+  const earDist = eyeDist * 0.65;
   const earLeftBase = {
-    x: headTop.x - cosA * earDist,
-    y: headTop.y - sinA * earDist
+    x: headTop.x - cosA * earDist + pose.upVector.x * (eyeDist * 0.22),
+    y: headTop.y - sinA * earDist + pose.upVector.y * (eyeDist * 0.22)
   };
   const earRightBase = {
-    x: headTop.x + cosA * earDist,
-    y: headTop.y + sinA * earDist
+    x: headTop.x + cosA * earDist + pose.upVector.x * (eyeDist * 0.22),
+    y: headTop.y + sinA * earDist + pose.upVector.y * (eyeDist * 0.22)
   };
 
-  const earWidth = eyeDist * 0.62;
-  const earHeight = eyeDist * 0.88;
+  const earWidth = eyeDist * 0.58;
+  const earHeight = eyeDist * 0.82;
 
   const drawFloppyEar = (bx, by, isLeft) => {
     ctx.save();
     ctx.translate(bx, by);
-    ctx.rotate(angle + (isLeft ? -0.2 : 0.2));
+    ctx.rotate(angle + (isLeft ? -0.22 : 0.22));
     if (!isLeft) ctx.scale(-1, 1);
 
-    // Natural floppy ear curve
+    // Continuous smooth rounded floppy puppy ear (NO flat straight lines)
     ctx.beginPath();
-    ctx.moveTo(-earWidth * 0.25, 0);
-    ctx.bezierCurveTo(-earWidth * 0.85, -earHeight * 0.4, -earWidth * 0.75, earHeight * 0.65, -earWidth * 0.1, earHeight * 0.98);
-    ctx.bezierCurveTo(earWidth * 0.45, earHeight * 1.05, earWidth * 0.85, earHeight * 0.45, earWidth * 0.35, 0);
+    ctx.moveTo(-earWidth * 0.2, 0);
+    // Arch UP and OUTWARD to the smooth rounded top fold apex
+    ctx.bezierCurveTo(
+      -earWidth * 0.35, -earHeight * 0.55,
+      earWidth * 0.2, -earHeight * 0.65,
+      earWidth * 0.55, -earHeight * 0.25
+    );
+    // Outer floppy droop curve hanging down
+    ctx.bezierCurveTo(
+      earWidth * 0.85, earHeight * 0.15,
+      earWidth * 0.75, earHeight * 0.85,
+      earWidth * 0.2, earHeight * 0.98
+    );
+    // Rounded bottom tip
+    ctx.bezierCurveTo(
+      -earWidth * 0.1, earHeight * 1.02,
+      -earWidth * 0.45, earHeight * 0.8,
+      -earWidth * 0.35, earHeight * 0.4
+    );
+    // Smooth inner curve returning to base
+    ctx.bezierCurveTo(
+      -earWidth * 0.28, earHeight * 0.2,
+      -earWidth * 0.24, earHeight * 0.08,
+      -earWidth * 0.2, 0
+    );
     ctx.closePath();
 
-    const earGrad = ctx.createLinearGradient(0, -earHeight * 0.2, 0, earHeight);
-    earGrad.addColorStop(0, '#9a5c32');
-    earGrad.addColorStop(0.6, '#824823');
-    earGrad.addColorStop(1, '#653415');
+    const earGrad = ctx.createLinearGradient(0, -earHeight * 0.5, 0, earHeight);
+    earGrad.addColorStop(0, '#9e6236');
+    earGrad.addColorStop(0.5, '#844c26');
+    earGrad.addColorStop(1, '#663717');
     ctx.fillStyle = earGrad;
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
-    ctx.shadowBlur = 10;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.38)';
+    ctx.shadowBlur = 12;
     ctx.shadowOffsetY = 4;
     ctx.fill();
 
-    // Soft pink inner ear fold
-    ctx.beginPath();
-    ctx.moveTo(-earWidth * 0.15, earHeight * 0.12);
-    ctx.bezierCurveTo(-earWidth * 0.55, earHeight * 0.26, -earWidth * 0.42, earHeight * 0.68, -earWidth * 0.05, earHeight * 0.78);
-    ctx.bezierCurveTo(earWidth * 0.3, earHeight * 0.82, earWidth * 0.55, earHeight * 0.46, earWidth * 0.2, earHeight * 0.15);
-    ctx.closePath();
-    ctx.fillStyle = '#e8a599';
+    // Soft pink inner ear fold (completely rounded, matching the curve)
     ctx.shadowColor = 'transparent';
     ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.moveTo(-earWidth * 0.1, -earHeight * 0.05);
+    ctx.bezierCurveTo(
+      -earWidth * 0.18, -earHeight * 0.35,
+      earWidth * 0.15, -earHeight * 0.42,
+      earWidth * 0.38, -earHeight * 0.15
+    );
+    ctx.bezierCurveTo(
+      earWidth * 0.55, earHeight * 0.15,
+      earWidth * 0.45, earHeight * 0.68,
+      earWidth * 0.12, earHeight * 0.78
+    );
+    ctx.bezierCurveTo(
+      -earWidth * 0.08, earHeight * 0.8,
+      -earWidth * 0.25, earHeight * 0.58,
+      -earWidth * 0.18, earHeight * 0.28
+    );
+    ctx.bezierCurveTo(
+      -earWidth * 0.14, earHeight * 0.12,
+      -earWidth * 0.12, 0.02,
+      -earWidth * 0.1, -earHeight * 0.05
+    );
+    ctx.closePath();
+    ctx.fillStyle = '#e8a599';
     ctx.fill();
 
     ctx.restore();
@@ -733,49 +773,46 @@ function renderGlitterDog(ctx, pose, time) {
   drawFloppyEar(earLeftBase.x, earLeftBase.y, true);
   drawFloppyEar(earRightBase.x, earRightBase.y, false);
 
-  // 4. Puppy Nose & Muzzle centered right on nose tip
-  const nw = eyeDist * 0.36;
-  const nh = eyeDist * 0.26;
+  // 4. Puppy Button Nose & Subtle Whisker Accents right on nose tip (no artificial white plate!)
+  const nw = eyeDist * 0.34;
+  const nh = eyeDist * 0.24;
 
   ctx.save();
   ctx.translate(noseTip.x, noseTip.y);
   ctx.rotate(angle);
 
-  // Soft warm cream muzzle patch
-  ctx.beginPath();
-  ctx.ellipse(0, nh * 0.15, nw * 0.9, nh * 0.8, 0, 0, Math.PI * 2);
-  const muzzleGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, nw * 0.9);
-  muzzleGrad.addColorStop(0, 'rgba(255, 245, 235, 0.88)');
-  muzzleGrad.addColorStop(0.7, 'rgba(250, 235, 220, 0.75)');
-  muzzleGrad.addColorStop(1, 'rgba(240, 220, 200, 0)');
-  ctx.fillStyle = muzzleGrad;
-  ctx.fill();
-
   // Cute Whisker Dots
-  ctx.fillStyle = 'rgba(100, 60, 40, 0.45)';
+  ctx.fillStyle = 'rgba(70, 40, 25, 0.55)';
   [-1, 1].forEach((dir) => {
     ctx.beginPath();
-    ctx.arc(dir * nw * 0.5, nh * 0.25, 1.8, 0, Math.PI * 2);
-    ctx.arc(dir * nw * 0.68, nh * 0.18, 1.6, 0, Math.PI * 2);
-    ctx.arc(dir * nw * 0.58, nh * 0.4, 1.5, 0, Math.PI * 2);
+    ctx.arc(dir * nw * 0.55, nh * 0.25, 1.8, 0, Math.PI * 2);
+    ctx.arc(dir * nw * 0.75, nh * 0.15, 1.6, 0, Math.PI * 2);
+    ctx.arc(dir * nw * 0.65, nh * 0.42, 1.5, 0, Math.PI * 2);
     ctx.fill();
   });
 
-  // 3D Chocolate Puppy Button Nose
+  // 3D Chocolate Puppy Button Nose with nostrils and shine
   ctx.beginPath();
-  const btnW = nw * 0.65;
-  const btnH = nh * 0.55;
+  const btnW = nw * 0.68;
+  const btnH = nh * 0.58;
   ctx.moveTo(0, -btnH * 0.35);
-  ctx.bezierCurveTo(-btnW * 0.6, -btnH * 0.45, -btnW * 0.7, btnH * 0.2, 0, btnH * 0.65);
-  ctx.bezierCurveTo(btnW * 0.7, btnH * 0.2, btnW * 0.6, -btnH * 0.45, 0, -btnH * 0.35);
+  ctx.bezierCurveTo(-btnW * 0.6, -btnH * 0.48, -btnW * 0.72, btnH * 0.2, 0, btnH * 0.68);
+  ctx.bezierCurveTo(btnW * 0.72, btnH * 0.2, btnW * 0.6, -btnH * 0.48, 0, -btnH * 0.35);
   ctx.closePath();
 
   const noseGrad = ctx.createLinearGradient(0, -btnH * 0.4, 0, btnH * 0.6);
   noseGrad.addColorStop(0, '#4a2818');
   noseGrad.addColorStop(1, '#231209');
   ctx.fillStyle = noseGrad;
-  ctx.shadowColor = 'rgba(0,0,0,0.35)';
+  ctx.shadowColor = 'rgba(0,0,0,0.38)';
   ctx.shadowBlur = 6;
+  ctx.fill();
+
+  // Nostril indentations
+  ctx.fillStyle = '#140804';
+  ctx.beginPath();
+  ctx.ellipse(-btnW * 0.22, btnH * 0.12, btnW * 0.08, btnH * 0.14, 0.2, 0, Math.PI * 2);
+  ctx.ellipse(btnW * 0.22, btnH * 0.12, btnW * 0.08, btnH * 0.14, -0.2, 0, Math.PI * 2);
   ctx.fill();
 
   // Glossy specular highlight
@@ -783,7 +820,7 @@ function renderGlitterDog(ctx, pose, time) {
   ctx.shadowBlur = 0;
   ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
   ctx.beginPath();
-  ctx.ellipse(0, -btnH * 0.15, btnW * 0.2, btnH * 0.08, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, -btnH * 0.15, btnW * 0.22, btnH * 0.09, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();
