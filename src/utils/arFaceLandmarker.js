@@ -155,18 +155,18 @@ export function detectFacePoses(videoElement, timestampMs, targetWidth, targetHe
       const leftCheekMid = pt(116);
       const rightCheekMid = pt(345);
 
-      // True cheek apples below eyes (NOT outer ear tragus 234/454)
-      const p117 = pt(117);
+      // True high cheek apples directly below eye pupils (NOT lower jaw or ear tragus)
       const p50 = pt(50);
-      const p346 = pt(346);
+      const p123 = pt(123);
       const p280 = pt(280);
+      const p352 = pt(352);
       const leftCheekApple = {
-        x: p117.x * 0.6 + p50.x * 0.4,
-        y: p117.y * 0.6 + p50.y * 0.4
+        x: p50.x * 0.7 + p123.x * 0.3,
+        y: p50.y * 0.7 + p123.y * 0.3
       };
       const rightCheekApple = {
-        x: p346.x * 0.6 + p280.x * 0.4,
-        y: p346.y * 0.6 + p280.y * 0.4
+        x: p280.x * 0.7 + p352.x * 0.3,
+        y: p280.y * 0.7 + p352.y * 0.3
       };
 
       // Eye vector and roll angle
@@ -236,14 +236,14 @@ export function detectFacePoses(videoElement, timestampMs, targetWidth, targetHe
       }
       faceStateCache.set(cacheKey, cached);
 
-      // Natural crown of hair and hovering halo positions above hair
+      // Natural crown of hair and hovering halo positions gracefully framing the hair
       const headTop = {
-        x: cached.forehead.x + cached.upX * (cached.eyeDist * 0.72),
-        y: cached.forehead.y + cached.upY * (cached.eyeDist * 0.72)
+        x: cached.forehead.x + cached.upX * (cached.eyeDist * 0.32),
+        y: cached.forehead.y + cached.upY * (cached.eyeDist * 0.32)
       };
       const hoverCrown = {
-        x: cached.forehead.x + cached.upX * (cached.eyeDist * 1.05),
-        y: cached.forehead.y + cached.upY * (cached.eyeDist * 1.05)
+        x: cached.forehead.x + cached.upX * (cached.eyeDist * 0.48),
+        y: cached.forehead.y + cached.upY * (cached.eyeDist * 0.48)
       };
 
       return {

@@ -85,6 +85,7 @@ export default function CameraBooth({
 
   const videoRef = useRef(null);
   const arCanvasRef = useRef(null);
+  const makeupCanvasRef = useRef(null);
   const animationFrameRef = useRef(null);
   const latestPosesRef = useRef([]);
   const fileInputRef = useRef(null);
@@ -282,26 +283,36 @@ export default function CameraBooth({
     const renderARLoop = (timestamp) => {
       const video = videoRef.current;
       const canvas = arCanvasRef.current;
+      const makeupCanvas = makeupCanvasRef.current;
 
       if (video && canvas && video.readyState >= 2 && video.videoWidth > 0) {
         if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
         }
+        if (makeupCanvas && (makeupCanvas.width !== video.videoWidth || makeupCanvas.height !== video.videoHeight)) {
+          makeupCanvas.width = video.videoWidth;
+          makeupCanvas.height = video.videoHeight;
+        }
 
         const ctx = canvas.getContext('2d');
+        const makeupCtx = makeupCanvas ? makeupCanvas.getContext('2d') : null;
+
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (makeupCtx) {
+          makeupCtx.clearRect(0, 0, makeupCanvas.width, makeupCanvas.height);
+        }
 
         if (selectedARFilter !== 'none') {
           const poses = detectFacePoses(video, timestamp, canvas.width, canvas.height);
           if (poses && poses.length > 0) {
             latestPosesRef.current = poses;
             setDetectedFacesCount(poses.length);
-            renderARFilter(ctx, selectedARFilter, poses, timestamp / 1000, canvas.width, canvas.height);
+            renderARFilter(ctx, selectedARFilter, poses, timestamp / 1000, canvas.width, canvas.height, makeupCtx);
           } else {
             latestPosesRef.current = [];
             setDetectedFacesCount(0);
-            renderARFilter(ctx, selectedARFilter, [], timestamp / 1000, canvas.width, canvas.height);
+            renderARFilter(ctx, selectedARFilter, [], timestamp / 1000, canvas.width, canvas.height, makeupCtx);
           }
         } else {
           latestPosesRef.current = [];
@@ -391,13 +402,22 @@ export default function CameraBooth({
     });
 
     // Composite active AR Filter onto captured photo with matching resolution and mirroring
-    if (selectedARFilter !== 'none' && arCanvasRef.current) {
+    if (selectedARFilter !== 'none') {
       ctx.save();
       if (isMirrored) {
         ctx.translate(outW, 0);
         ctx.scale(-1, 1);
       }
-      ctx.drawImage(arCanvasRef.current, sx, sy, sw, sh, 0, 0, outW, outH);
+      // 1. Soft-light photographic makeup layer (skin pores & texture preserved!)
+      if (makeupCanvasRef.current) {
+        ctx.globalCompositeOperation = 'soft-light';
+        ctx.drawImage(makeupCanvasRef.current, sx, sy, sw, sh, 0, 0, outW, outH);
+      }
+      // 2. 3D Accessories and sparkles layer
+      if (arCanvasRef.current) {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.drawImage(arCanvasRef.current, sx, sy, sw, sh, 0, 0, outW, outH);
+      }
       ctx.restore();
     }
 
@@ -722,9 +742,19 @@ export default function CameraBooth({
                       transform: isMirrored ? 'scaleX(-1)' : 'none'
                     }}
                   />
+                  {/* Layer A: Natural Soft-Light Beauty Blush Canvas (Blends directly with camera skin pixels) */}
+                  <canvas
+                    ref={makeupCanvasRef}
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none z-10"
+                    style={{
+                      mixBlendMode: 'soft-light',
+                      transform: isMirrored ? 'scaleX(-1)' : 'none'
+                    }}
+                  />
+                  {/* Layer B: 3D Glossy AR Accessories & Particle Sparkles Canvas */}
                   <canvas
                     ref={arCanvasRef}
-                    className="absolute inset-0 w-full h-full object-cover pointer-events-none z-10"
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none z-20"
                     style={{
                       transform: isMirrored ? 'scaleX(-1)' : 'none'
                     }}
